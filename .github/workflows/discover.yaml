@@ -101,6 +101,15 @@ jobs:
           system: x86_64-linux
           reclaim: "false"
 
+      - name: Cache Nix Store
+        # key on the caller's flake.lock so a nixpkgs bump rolls the cache;
+        # otherwise restore the latest discover store for this runner, which
+        # already holds the prebuilt atelier tool so it is not rebuilt from source
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-discover-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}
+          restore-prefixes-first-match: nix-discover-${{ runner.os }}-
+
       - name: Generate Matrix
         id: gen
         shell: bash
