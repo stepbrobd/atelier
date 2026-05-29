@@ -29,7 +29,7 @@ def _effective_systems(rules: Rules, enabled: Sequence[str]) -> list[str]:
     out: list[str] = []
     for system in rules.systems:
         if system not in RUNNERS:
-            _warn(f"no runner mapping for system {system}, skipping")
+            _warn(f"No runner mapping for system {system}, skipping")
             continue
         if allowed is None or system in allowed:
             out.append(system)
@@ -43,7 +43,7 @@ def _output_sets(rules: Rules) -> tuple[list[str], list[str]]:
     configs = [s for s in leading if s in CONFIG_SETS]
     for output in leading:
         if output not in PER_SYSTEM_SETS and output not in CONFIG_SETS:
-            _warn(f"unknown output set {output} in include, skipping")
+            _warn(f"Unknown output set {output} in include, skipping")
     return per_system, configs
 
 
