@@ -53,7 +53,7 @@ runs:
           experimental-features = nix-command flakes
           build-dir = /nix/build
           system = ${{ inputs.system }}
-          sandbox = true
+          sandbox = ${{ runner.os == 'macOS' && 'relaxed' || 'true' }}
 
     - name: Create Build Dir
       shell: bash
