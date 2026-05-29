@@ -53,9 +53,10 @@ def cli() -> None:
 @click.option(
     "--workers",
     type=click.IntRange(1),
-    default=4,
+    default=os.cpu_count() or 4,
     show_default=True,
-    help="nix-eval-jobs worker count.",
+    help="nix-eval-jobs worker count (defaults to the detected cpu count). "
+    "evaluation is i/o bound, so oversubscribing past the core count is fine.",
 )
 def discover(
     rules_path: Path, flake: str, systems: str, only: str, workers: int
