@@ -1,0 +1,11 @@
+[project]
+name = "atelier"
+version = "2026.529.0"
+description = "nix atelier ;)"
+readme = "readme.md"
+requires-python = ">=3.14"
+dependencies = ["click"]
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
