@@ -119,8 +119,9 @@ def clean_error(error: str) -> str:
     parts = flat.split("error:")
     message = f"error: {parts[-1].strip()}" if len(parts) > 1 else flat
     # neutralise github workflow-command markers in attacker controlled text
-    # so a crafted eval error cannot spoof annotations when printed in a cell
-    return message.strip().replace("::", ":")[:400]
+    # so a crafted eval error cannot spoof annotations when printed in a cell;
+    # collapse every run of colons since a lone replace leaves "::" on odd runs
+    return re.sub(r":{2,}", ":", message.strip())[:400]
 
 
 def is_skippable(error: str) -> bool:
