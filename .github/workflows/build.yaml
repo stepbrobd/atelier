@@ -1,0 +1,104 @@
+name: Atelier Build
+
+# reusable build workflow for one chunk of the discover matrix
+# each cell is its own job so it renders as its own check run with live logs
+# nesting lets the parent fan out past the 256 cell matrix cap
+
+on:
+  workflow_call:
+    inputs:
+      cells:
+        description: json matrix object for this chunk
+        required: true
+        type: string
+      push:
+        description: push build results to the binary cache
+        required: false
+        default: false
+        type: boolean
+    secrets:
+      ATTIC_TOKEN:
+        required: false
+      CACHIX_AUTH_TOKEN:
+        required: false
+      CACHIX_SIGNING_KEY:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  cell:
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(inputs.cells) }}
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      INSTALLABLE: ${{ matrix.installable }}
+      LABEL: ${{ matrix.label }}
+      EVAL_ERROR: ${{ matrix.error }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Report Evaluation Failure
+        if: ${{ matrix.installable == '' }}
+        shell: bash
+        run: |
+          echo "::error::evaluation failed for ${LABEL}"
+          printf '%s\n' "${EVAL_ERROR}"
+          exit 1
+
+      - name: Set Up Nix
+        if: ${{ matrix.installable != '' }}
+        uses: ./.github/actions/atelier
+        with:
+          system: ${{ matrix.system }}
+
+      - name: Build
+        if: ${{ matrix.installable != '' }}
+        shell: bash
+        run: |
+          set -o pipefail
+          nix build "${INSTALLABLE}^*" --no-link --print-build-logs 2>&1 | tee build.log
+
+      - name: Push To Cache
+        if: ${{ matrix.installable != '' && (inputs.push || github.ref == 'refs/heads/master') && github.event.pull_request.head.repo.fork != true && ((vars.ATTIC_SERVER != '' && vars.ATTIC_CACHE != '') || vars.CACHIX_CACHE != '') }}
+        shell: bash
+        env:
+          ATTIC_SERVER: ${{ vars.ATTIC_SERVER }}
+          ATTIC_CACHE: ${{ vars.ATTIC_CACHE }}
+          ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+          CACHIX_CACHE: ${{ vars.CACHIX_CACHE }}
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+
+          # only the outputs we just built
+          paths="$(nix build "${INSTALLABLE}^*" --no-link --print-out-paths)"
+          [ -n "$paths" ] || exit 0
+
+          if [ -n "${ATTIC_SERVER}" ] && [ -n "${ATTIC_CACHE}" ]; then
+            nix profile add nixpkgs#attic-client
+            attic login default "${ATTIC_SERVER}" "${ATTIC_TOKEN}"
+            attic cache info "${ATTIC_CACHE}" || { echo "::error::attic returned an error"; exit 0; }
+            # shellcheck disable=SC2086
+            attic push "${ATTIC_CACHE}" $paths
+          elif [ -n "${CACHIX_CACHE}" ]; then
+            nix profile add nixpkgs#cachix
+            [ -n "${CACHIX_SIGNING_KEY:-}" ] || unset CACHIX_SIGNING_KEY
+            # shellcheck disable=SC2086
+            printf '%s\n' $paths | cachix push "${CACHIX_CACHE}"
+          fi
+
+      - name: Upload Log
+        if: ${{ always() && matrix.installable != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          # the label is the flake attribute, unique per cell across all chunks
+          # strategy.job-index resets per chunk so it would collide otherwise
+          name: log-${{ matrix.label }}
+          path: build.log
+          if-no-files-found: ignore

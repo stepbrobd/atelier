@@ -1,0 +1,10 @@
+# atelier rule file
+# glob patterns match the full flake attribute path
+# per system sets match <output>.<system>.<rest>
+# nixos and darwin configs match <output>.<host>
+# matching is dot segmented with equal segment count and fnmatch per segment
+# a bare * is exactly one segment so a nested scope needs its own segment
+
+# build the flake's own package and dev shell on every target
+systems = ["x86_64-linux", "aarch64-linux", "aarch64-darwin"]
+include = ["packages.*.*", "devShells.*.default"]

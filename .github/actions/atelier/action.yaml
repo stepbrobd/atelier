@@ -1,0 +1,69 @@
+name: Atelier
+description: install nix and optionally reclaim disk space for building flake outputs
+
+inputs:
+  system:
+    description: nix system to build for
+    required: true
+  reclaim:
+    description: reclaim runner disk space for large builds
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Reclaim Disk Space (Linux)
+      if: ${{ inputs.reclaim == 'true' && runner.os == 'Linux' }}
+      uses: wimpysworld/nothing-but-nix@main
+      with:
+        hatchet-protocol: rampage
+
+    - name: Reclaim Disk Space (Darwin)
+      if: ${{ inputs.reclaim == 'true' && runner.os == 'macOS' }}
+      shell: bash
+      run: |
+        echo "::group::disk space (before)"
+        sudo df -h
+        echo "::endgroup::"
+
+        echo "::group::disable mds"
+        sudo mdutil -i off -a || echo "mdutil failed"
+        sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.metadata.mds.plist \
+          || echo "launchctl unload failed"
+        echo "::endgroup::"
+
+        echo "background space expansion started, /nix will grow as space becomes available"
+        sudo rm -rf \
+          /Applications/Xcode_* \
+          /Library/Developer/CoreSimulator \
+          /Library/Frameworks \
+          /Users/runner/.dotnet \
+          /Users/runner/.rustup \
+          /Users/runner/Library/Android \
+          /Users/runner/Library/Caches \
+          /Users/runner/Library/Developer/CoreSimulator \
+          /Users/runner/hostedtoolcache &
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v31
+      with:
+        # build-dir in /nix works around nothing-but-nix issue 18
+        extra_nix_config: |
+          accept-flake-config = true
+          experimental-features = nix-command flakes
+          build-dir = /nix/build
+          system = ${{ inputs.system }}
+
+    - name: Create Build Dir
+      shell: bash
+      run: sudo mkdir -p /nix/build
+
+    - name: Report Disk Space (Darwin)
+      if: ${{ inputs.reclaim == 'true' && runner.os == 'macOS' }}
+      uses: srz-zumix/post-run-action@v3
+      with:
+        shell: bash -e {0}
+        post-run: |
+          echo "::group::disk space (after)"
+          sudo df -h
+          echo "::endgroup::"

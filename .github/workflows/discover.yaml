@@ -1,0 +1,152 @@
+name: Atelier
+
+# rule driven multi platform flake build
+# discover evaluates the flake with the atelier tool and emits a chunked matrix
+# build fans out one cell per drv onto a native runner via a reusable workflow
+# skip posts a skipped check for broken or unsupported platform attrs
+# gate is the single stable check for branch protection
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      rules:
+        description: rule file path
+        type: string
+        default: atelier.toml
+      x86_64-linux:
+        description: build on x86_64-linux
+        type: boolean
+        default: true
+      aarch64-linux:
+        description: build on aarch64-linux
+        type: boolean
+        default: true
+      aarch64-darwin:
+        description: build on aarch64-darwin
+        type: boolean
+        default: true
+      attr:
+        description: restrict to attrs matching this glob, empty means all
+        type: string
+        default: ""
+      push:
+        description: push results to the binary cache
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atelier-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  Discover:
+    runs-on: ubuntu-latest
+    outputs:
+      chunks: ${{ steps.gen.outputs.chunks }}
+      skipped: ${{ steps.gen.outputs.skipped }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set Up Nix
+        uses: ./.github/actions/atelier
+        with:
+          system: x86_64-linux
+          reclaim: "false"
+
+      - name: Generate Matrix
+        id: gen
+        shell: bash
+        env:
+          RULES: ${{ inputs.rules || 'atelier.toml' }}
+          ATTR: ${{ inputs.attr }}
+          ON_X8664_LINUX: ${{ inputs.x86_64-linux }}
+          ON_AARCH64_LINUX: ${{ inputs.aarch64-linux }}
+          ON_AARCH64_DARWIN: ${{ inputs.aarch64-darwin }}
+        run: |
+          set -euo pipefail
+          systems=""
+          [ "${ON_X8664_LINUX:-true}" != "false" ] && systems="${systems:+$systems,}x86_64-linux"
+          [ "${ON_AARCH64_LINUX:-true}" != "false" ] && systems="${systems:+$systems,}aarch64-linux"
+          [ "${ON_AARCH64_DARWIN:-true}" != "false" ] && systems="${systems:+$systems,}aarch64-darwin"
+
+          # on push and pull_request the toggles are empty so systems holds all
+          # three, an empty systems here means a dispatch unchecked every system
+          # so build nothing rather than letting the tool read empty as all
+          if [ -z "$systems" ]; then
+            echo "::notice::all systems disabled, nothing to build"
+            { echo "chunks=[]"; echo "skipped=[]"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          nix run .# -- discover --rules "$RULES" --flake . --systems "$systems" --attr "$ATTR"
+
+  Build:
+    needs: Discover
+    if: ${{ needs.Discover.outputs.chunks != '' && needs.Discover.outputs.chunks != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.Discover.outputs.chunks) }}
+    name: ${{ matrix.name }}
+    uses: ./.github/workflows/build.yaml
+    with:
+      cells: ${{ matrix.cells }}
+      push: ${{ github.event_name == 'workflow_dispatch' && inputs.push || false }}
+    secrets:
+      ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+
+  Skip:
+    needs: Discover
+    if: ${{ needs.Discover.outputs.skipped != '' && needs.Discover.outputs.skipped != '[]' && github.event.pull_request.head.repo.fork != true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Post Skipped Checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SKIPPED: ${{ needs.Discover.outputs.skipped }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$SKIPPED" | jq -c '.[]' | while read -r row; do
+            jq -nc \
+              --arg name "$(printf '%s' "$row" | jq -r '.label')" \
+              --arg sha "$SHA" \
+              --arg reason "$(printf '%s' "$row" | jq -r '.reason')" \
+              --arg url "$RUN_URL" \
+              '{name: $name, head_sha: $sha, status: "completed", conclusion: "skipped",
+                details_url: $url, output: {title: "skipped", summary: $reason}}' \
+            | gh api "repos/${REPO}/check-runs" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                --method POST --input - >/dev/null \
+            || echo "::warning::failed to post skipped check"
+          done
+
+  Gate:
+    needs: Build
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require Builds
+        shell: bash
+        env:
+          RESULT: ${{ needs.Build.result }}
+        run: |
+          echo "build result ${RESULT}"
+          # skipped means the matrix was empty which is a pass
+          [ "$RESULT" = success ] || [ "$RESULT" = skipped ]
