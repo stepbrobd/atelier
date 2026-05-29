@@ -55,8 +55,8 @@ def cli() -> None:
     type=click.IntRange(1),
     default=os.cpu_count() or 4,
     show_default=True,
-    help="nix-eval-jobs worker count (defaults to the detected cpu count). "
-    "evaluation is i/o bound, so oversubscribing past the core count is fine.",
+    help="Number of nix-eval-jobs workers (defaults to the detected CPU count). "
+    "Evaluation is I/O bound, so oversubscribing past the core count is fine.",
 )
 def discover(
     rules_path: Path, flake: str, systems: str, only: str, workers: int
@@ -73,7 +73,7 @@ def discover(
 
     cells = sum(len(json.loads(chunk.cells)["include"]) for chunk in chunks)
     click.echo(
-        f"::notice::discovered {cells} build cells in {len(chunks)} chunk(s), "
+        f"::notice::Discovered {cells} build cells in {len(chunks)} chunk(s), "
         f"{len(skipped)} skipped",
         err=True,
     )
