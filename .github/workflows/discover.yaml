@@ -13,27 +13,27 @@ on:
   workflow_dispatch:
     inputs:
       rules:
-        description: rule file path
+        description: Rule file path
         type: string
         default: atelier.toml
       x86_64-linux:
-        description: build on x86_64-linux
+        description: Build on x86_64-linux
         type: boolean
         default: true
       aarch64-linux:
-        description: build on aarch64-linux
+        description: Build on aarch64-linux
         type: boolean
         default: true
       aarch64-darwin:
-        description: build on aarch64-darwin
+        description: Build on aarch64-darwin
         type: boolean
         default: true
       attr:
-        description: restrict to attrs matching this glob, empty means all
+        description: Restrict to attrs matching this glob, empty means all
         type: string
         default: ""
       push:
-        description: push results to the binary cache
+        description: Push results to the binary cache
         type: boolean
         default: false
   # downstream repos consume atelier by calling this workflow; the inputs mirror
@@ -41,31 +41,31 @@ on:
   workflow_call:
     inputs:
       rules:
-        description: rule file path
+        description: Rule file path
         type: string
         default: atelier.toml
       x86_64-linux:
-        description: build on x86_64-linux
+        description: Build on x86_64-linux
         type: boolean
         default: true
       aarch64-linux:
-        description: build on aarch64-linux
+        description: Build on aarch64-linux
         type: boolean
         default: true
       aarch64-darwin:
-        description: build on aarch64-darwin
+        description: Build on aarch64-darwin
         type: boolean
         default: true
       attr:
-        description: restrict to attrs matching this glob, empty means all
+        description: Restrict to attrs matching this glob, empty means all
         type: string
         default: ""
       push:
-        description: push results to the binary cache
+        description: Push results to the binary cache
         type: boolean
         default: false
       tool:
-        description: atelier tool flake ref a caller runs, the published flake
+        description: Atelier tool flake ref a caller runs, the published flake
         type: string
         default: github:stepbrobd/atelier#
     secrets:
@@ -124,7 +124,7 @@ jobs:
           # three, an empty systems here means a dispatch unchecked every system
           # so build nothing rather than letting the tool read empty as all
           if [ -z "$systems" ]; then
-            echo "::notice::all systems disabled, nothing to build"
+            echo "::notice::All systems disabled, nothing to build"
             { echo "chunks=[]"; echo "skipped=[]"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -180,7 +180,7 @@ jobs:
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
                 --method POST --input - >/dev/null \
-            || echo "::warning::failed to post skipped check"
+            || echo "::warning::Failed to post skipped check"
           done
 
   Gate:
