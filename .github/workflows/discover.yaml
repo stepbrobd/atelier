@@ -1,4 +1,4 @@
-name: Atelier
+name: Atelier Discover
 
 # rule driven multi platform flake build
 # discover evaluates the flake with the atelier tool and emits a chunked matrix
