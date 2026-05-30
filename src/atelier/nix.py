@@ -81,9 +81,12 @@ def evaluate(
         "--workers", str(workers),
         "--select", select,
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    # capture stdout (the json results) but let stderr stream to the log live,
+    # so fetches, getFlake calls, and per-attr eval progress are visible instead
+    # of buffered until the end, where a slow eval looks like a frozen run
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=False)
     if proc.returncode != 0:
-        raise RuntimeError(f"nix-eval-jobs failed for {flake!r}\n{proc.stderr.strip()}")
+        raise RuntimeError(f"nix-eval-jobs failed for {flake!r} (see the log above)")
     return [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
 
 
