@@ -105,7 +105,8 @@ static token and needs no `id-token` permission. Unlike Attic and Cachix, niks3
 has no separate cache name - the server URL identifies the cache.
 
 Pushes happen on a push to your repository's default branch (or `master`) and on
-a run with `push: true`. Forked-PR runs never push.
+a run with `push: true`. Forked-PR runs never push. Caching is best-effort: a
+failed push to any backend is logged as a warning and never fails the build.
 
 ## Use it in your repo
 
