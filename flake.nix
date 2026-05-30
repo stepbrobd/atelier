@@ -20,11 +20,11 @@
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            mypy
             nixpkgs-fmt
             python
             python.pkgs.venvShellHook
             ruff
+            ty
             uv
           ];
 
@@ -51,7 +51,7 @@
           done
           pushd "$root" > /dev/null
           ${lib.getExe pkgs.deno} fmt **/*.md **/*.yaml
-          ${lib.getExe pkgs.mypy} --disable-error-code=import .
+          ${lib.getExe pkgs.ty} check --fix --error all .
           ${lib.getExe pkgs.nixpkgs-fmt} .
           ${lib.getExe pkgs.ruff} check --fix --unsafe-fixes --preview .
           ${lib.getExe pkgs.taplo} format pyproject.toml
