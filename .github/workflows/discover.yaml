@@ -83,6 +83,8 @@ on:
         required: false
       CACHIX_SIGNING_KEY:
         required: false
+      NIKS3_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -155,6 +157,11 @@ jobs:
   Build:
     needs: Discover
     if: ${{ needs.Discover.outputs.chunks != '' && needs.Discover.outputs.chunks != '[]' }}
+    # carry id-token down to build.yaml for the niks3 oidc push; a callee cannot
+    # raise it, so the top-level contents:read would otherwise strip it here
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -170,6 +177,7 @@ jobs:
       ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
       CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+      NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
 
   Skip:
     needs: Discover

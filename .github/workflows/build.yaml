@@ -23,6 +23,8 @@ on:
         required: false
       CACHIX_SIGNING_KEY:
         required: false
+      NIKS3_TOKEN:
+        required: false
 
 permissions:
   contents: read
@@ -34,6 +36,11 @@ jobs:
       matrix: ${{ fromJSON(inputs.cells) }}
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
+    # id-token lets the niks3 push mint a github oidc token; harmless for the
+    # other backends. it only takes effect if the caller granted it too
+    permissions:
+      contents: read
+      id-token: write
     env:
       INSTALLABLE: ${{ matrix.installable }}
       LABEL: ${{ matrix.label }}
@@ -66,7 +73,7 @@ jobs:
           nix build "${INSTALLABLE}^*" --no-link --print-build-logs 2>&1 | tee build.log
 
       - name: Push To Cache
-        if: ${{ matrix.installable != '' && (inputs.push || github.ref == 'refs/heads/master' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && github.event.pull_request.head.repo.fork != true && ((vars.ATTIC_SERVER != '' && vars.ATTIC_CACHE != '') || vars.CACHIX_CACHE != '') }}
+        if: ${{ matrix.installable != '' && (inputs.push || github.ref == 'refs/heads/master' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && github.event.pull_request.head.repo.fork != true && ((vars.ATTIC_SERVER != '' && vars.ATTIC_CACHE != '') || vars.CACHIX_CACHE != '' || vars.NIKS3_SERVER != '') }}
         shell: bash
         env:
           ATTIC_SERVER: ${{ vars.ATTIC_SERVER }}
@@ -75,25 +82,75 @@ jobs:
           CACHIX_CACHE: ${{ vars.CACHIX_CACHE }}
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
           CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+          NIKS3_SERVER: ${{ vars.NIKS3_SERVER }}
+          NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
 
           # only the outputs we just built
           paths="$(nix build "${INSTALLABLE}^*" --no-link --print-out-paths)"
           [ -n "$paths" ] || exit 0
 
+          # push to every configured backend; isolate each in a subshell so one
+          # failing cannot abort the others, and fail the step if any did
+          rc=0
+
           if [ -n "${ATTIC_SERVER}" ] && [ -n "${ATTIC_CACHE}" ]; then
-            nix profile add nixpkgs#attic-client
-            attic login default "${ATTIC_SERVER}" "${ATTIC_TOKEN}"
-            attic cache info "${ATTIC_CACHE}" || { echo "::error::attic returned an error"; exit 0; }
-            # shellcheck disable=SC2086
-            attic push "${ATTIC_CACHE}" $paths
-          elif [ -n "${CACHIX_CACHE}" ]; then
-            nix profile add nixpkgs#cachix
-            [ -n "${CACHIX_SIGNING_KEY:-}" ] || unset CACHIX_SIGNING_KEY
-            # shellcheck disable=SC2086
-            printf '%s\n' $paths | cachix push "${CACHIX_CACHE}"
+            (
+              set -euo pipefail
+              nix profile add nixpkgs#attic-client
+              attic login default "${ATTIC_SERVER}" "${ATTIC_TOKEN}"
+              # a missing or unreachable cache is a soft skip, not a build failure
+              attic cache info "${ATTIC_CACHE}" || { echo "::warning::Attic cache unavailable, skipping"; exit 0; }
+              # shellcheck disable=SC2086
+              attic push "${ATTIC_CACHE}" $paths
+            ) || { echo "::warning::Attic push failed"; rc=1; }
           fi
+
+          if [ -n "${CACHIX_CACHE}" ]; then
+            (
+              set -euo pipefail
+              nix profile add nixpkgs#cachix
+              [ -n "${CACHIX_SIGNING_KEY:-}" ] || unset CACHIX_SIGNING_KEY
+              # shellcheck disable=SC2086
+              printf '%s\n' $paths | cachix push "${CACHIX_CACHE}"
+            ) || { echo "::warning::Cachix push failed"; rc=1; }
+          fi
+
+          if [ -n "${NIKS3_SERVER}" ]; then
+            (
+              set -euo pipefail
+              nix profile add nixpkgs#niks3
+              if [ -n "${NIKS3_TOKEN:-}" ]; then
+                # token auth: write the secret to a private file, pass its path
+                tok="$(mktemp)"
+                (umask 077; printf '%s' "${NIKS3_TOKEN}" > "$tok")
+                # shellcheck disable=SC2086
+                niks3 push --server-url "${NIKS3_SERVER}" --auth-token-path "$tok" $paths
+              elif [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+                # oidc auth: the audience must match what the server validates the jwt against
+                aud="$(curl -sf "${NIKS3_SERVER}/api/cache-config?issuer=https://token.actions.githubusercontent.com" | jq -r '.oidc_audience // empty')"
+                if [ -z "$aud" ]; then
+                  echo "::warning::Skipping niks3 push: server advertises no oidc_audience for the GitHub issuer; configure a GitHub OIDC provider on the server"
+                else
+                  # niks3 reruns this script to refresh the token; leave the github
+                  # oidc env vars unexpanded so they are read at each mint, not now
+                  s="$(mktemp)"
+                  printf '%s\n' \
+                    '#!/bin/sh' \
+                    "exec curl -sf -H \"Authorization: Bearer \$ACTIONS_ID_TOKEN_REQUEST_TOKEN\" \"\$ACTIONS_ID_TOKEN_REQUEST_URL&audience=${aud}\" | jq '{token: .value, expires_at: ((now + 240) | todateiso8601)}'" \
+                    > "$s"
+                  chmod 700 "$s"
+                  # shellcheck disable=SC2086
+                  niks3 push --server-url "${NIKS3_SERVER}" --auth-token-script "$s" $paths
+                fi
+              else
+                echo "::warning::Skipping niks3 push: OIDC needs 'id-token: write' in the caller workflow"
+              fi
+            ) || { echo "::warning::niks3 push failed"; rc=1; }
+          fi
+
+          exit "$rc"
 
       - name: Upload Log
         if: ${{ always() && matrix.installable != '' }}
