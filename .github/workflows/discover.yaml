@@ -36,6 +36,10 @@ on:
         description: Push results to the binary cache
         type: boolean
         default: false
+      workers:
+        description: Eval workers; each may use ~4 GiB, keep workers x 4 GiB under runner RAM
+        type: number
+        default: 2
   # downstream repos consume atelier by calling this workflow; the inputs mirror
   # workflow_dispatch so the generate step reads them the same way
   workflow_call:
@@ -68,6 +72,10 @@ on:
         description: Atelier tool flake ref a caller runs, the published flake
         type: string
         default: github:stepbrobd/atelier#
+      workers:
+        description: Eval workers; each may use ~4 GiB, keep workers x 4 GiB under runner RAM
+        type: number
+        default: 2
     secrets:
       ATTIC_TOKEN:
         required: false
@@ -119,6 +127,10 @@ jobs:
           # empty on atelier's own ci so it falls back to the local flake (.#),
           # set to the published flake when a downstream repo calls this workflow
           TOOL: ${{ inputs.tool }}
+          # nix-eval-jobs uses up to ~4 GiB per worker, so the aggregate
+          # (workers x 4 GiB) must fit the runner; a low count keeps heavy
+          # config toplevel evals from OOM-killing the whole runner
+          WORKERS: ${{ inputs.workers }}
           ON_X8664_LINUX: ${{ inputs.x86_64-linux }}
           ON_AARCH64_LINUX: ${{ inputs.aarch64-linux }}
           ON_AARCH64_DARWIN: ${{ inputs.aarch64-darwin }}
@@ -138,7 +150,7 @@ jobs:
             exit 0
           fi
 
-          nix run "${TOOL:-.#}" -- discover --rules "$RULES" --flake . --systems "$systems" --attr "$ATTR"
+          nix run "${TOOL:-.#}" -- discover --rules "$RULES" --flake . --systems "$systems" --attr "$ATTR" --workers "${WORKERS:-2}"
 
   Build:
     needs: Discover
