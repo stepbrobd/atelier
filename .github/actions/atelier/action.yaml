@@ -45,10 +45,10 @@ runs:
           /Users/runner/hostedtoolcache &
 
     - name: Install Nix
-      uses: cachix/install-nix-action@v31
+      uses: nixos/nix-installer-action@main
       with:
         # build-dir in /nix works around nothing-but-nix issue 18
-        extra_nix_config: |
+        extra-conf: |
           accept-flake-config = true
           experimental-features = nix-command flakes
           build-dir = /nix/build
