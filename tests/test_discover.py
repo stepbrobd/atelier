@@ -1,11 +1,14 @@
 import json
 
+from atelier import nix
 from atelier.discover import (
+    _cached_skip,
     _cell,
     _chunks,
     _effective_systems,
     _output_sets,
     _selected,
+    discover,
 )
 from atelier.types import Cell, Job, Rules
 
@@ -78,6 +81,46 @@ def _cells(count: int) -> list[Cell]:
         Cell("x86_64-linux", "ubuntu-latest", f"p{i}", f".#p{i}", "")
         for i in range(count)
     ]
+
+
+def test_cached_skip_reason_is_sentence_cased() -> None:
+    skip = _cached_skip(
+        Job("packages.x86_64-linux.hello", "x86_64-linux", ".#x", None, cached=True)
+    )
+    assert skip.label == "packages.x86_64-linux.hello"
+    assert skip.system == "x86_64-linux"
+    assert "cache" in skip.reason.lower()
+    assert skip.reason[:1].isupper()
+
+
+def test_cached_attr_is_skipped_not_built(monkeypatch) -> None:
+    # a cached attribute carries no build cell (no runner, no build, no push) and
+    # instead surfaces as a skipped check, like a broken or excluded attribute
+    objects = [
+        {
+            "attrPath": ["packages.x86_64-linux", "fresh"],
+            "drvPath": "/nix/store/a.drv",
+            "system": "x86_64-linux",
+            "cacheStatus": "notBuilt",
+        },
+        {
+            "attrPath": ["packages.x86_64-linux", "done"],
+            "drvPath": "/nix/store/b.drv",
+            "system": "x86_64-linux",
+            "cacheStatus": "cached",
+        },
+    ]
+    monkeypatch.setattr(nix, "evaluate", lambda *args, **kwargs: objects)
+    rules = Rules(
+        systems=("x86_64-linux",),
+        include=("packages.*.*",),
+        exclude=(),
+        substituters=frozenset({"https://cache.nixos.org"}),
+    )
+    chunks, skipped = discover(rules, [], None, 2)
+    built = [c["label"] for chunk in chunks for c in json.loads(chunk.cells)["include"]]
+    assert built == ["packages.x86_64-linux.fresh"]
+    assert any(skip.label == "packages.x86_64-linux.done" for skip in skipped)
 
 
 def test_single_chunk_named_build() -> None:

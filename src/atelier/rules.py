@@ -2,18 +2,30 @@ import fnmatch
 import tomllib
 from pathlib import Path
 
-from atelier.types import DEFAULT_INCLUDE, DEFAULT_SYSTEMS, PER_SYSTEM_SETS, Rules
+from atelier.types import (
+    DEFAULT_INCLUDE,
+    DEFAULT_SYSTEMS,
+    NIXOS_CACHE,
+    PER_SYSTEM_SETS,
+    Rules,
+)
 
 _GLOB_CHARS = frozenset("*?[]")
 
 
 def load(path: Path) -> Rules:
-    """Read a rule file, falling back to defaults for any omitted key."""
+    """Read a rule file, falling back to defaults for any omitted key.
+
+    The official cache is always folded into ``substituters`` (a set, so a user
+    who also lists it does not duplicate it), so cache-status checks work even
+    when the rule file names no cache of its own.
+    """
     data = tomllib.loads(path.read_text())
     return Rules(
         systems=tuple(data.get("systems", DEFAULT_SYSTEMS)),
         include=tuple(data.get("include", DEFAULT_INCLUDE)),
         exclude=tuple(data.get("exclude", ())),
+        substituters=frozenset(data.get("substituters", ())) | {NIXOS_CACHE},
     )
 
 

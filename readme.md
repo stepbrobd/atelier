@@ -9,14 +9,25 @@ patterns (similar to garnix, rip) matched against the full flake attribute path.
 
 ## Rule file
 
-`atelier.toml` has three keys, all optional. An omitted key falls back to its
+`atelier.toml` has four keys, all optional. An omitted key falls back to its
 default, so an empty file builds the defaults below.
 
-| key       | type            | default                                   | meaning                                    |
-| --------- | --------------- | ----------------------------------------- | ------------------------------------------ |
-| `systems` | list of strings | `["x86_64-linux"]`                        | systems to evaluate and build for          |
-| `include` | list of globs   | `["packages.*.*", "devShells.*.default"]` | attributes to build                        |
-| `exclude` | list of globs   | `[]`                                      | attributes to drop (exclude beats include) |
+| key            | type            | default                                   | meaning                                              |
+| -------------- | --------------- | ----------------------------------------- | ---------------------------------------------------- |
+| `systems`      | list of strings | `["x86_64-linux"]`                        | systems to evaluate and build for                    |
+| `include`      | list of globs   | `["packages.*.*", "devShells.*.default"]` | attributes to build                                  |
+| `exclude`      | list of globs   | `[]`                                      | attributes to drop (exclude beats include)           |
+| `substituters` | list of strings | `[]`                                      | extra caches to check; a cached attribute is skipped |
+
+### Skipping cached builds
+
+Before building, atelier checks each attribute's outputs against `substituters`
+(the official cache `https://cache.nixos.org` is always added, deduplicated). An
+attribute already present in any of them is reported as a skipped check —
+`already in the binary cache` — rather than built, so no runner is spun up to
+rebuild and re-push a path the cache already holds. Only outputs available from
+a shared cache are skipped; a path present solely on the eval runner still
+builds, since another runner could not substitute it.
 
 ### Supported systems
 
@@ -65,6 +76,10 @@ include = [
 exclude = [
   "legacyPackages.*.spotify", # unfree
 ]
+
+# caches checked before building; an attr already in one is skipped, not rebuilt
+# https://cache.nixos.org is always checked, so listing only your own is enough
+substituters = ["https://cache.example.org"]
 ```
 
 ## Binary cache

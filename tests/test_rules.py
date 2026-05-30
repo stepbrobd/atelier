@@ -1,4 +1,6 @@
-from atelier.rules import excluded, included, matches, prunable_excludes
+from pathlib import Path
+
+from atelier.rules import excluded, included, load, matches, prunable_excludes
 from atelier.types import Rules
 
 
@@ -48,6 +50,37 @@ def test_included() -> None:
 def test_excluded() -> None:
     assert excluded("legacyPackages.x86_64-linux.spotify", _RULES)
     assert not excluded("legacyPackages.x86_64-linux.caddy", _RULES)
+
+
+_NIXOS_CACHE = "https://cache.nixos.org"
+
+
+def test_load_substituters_default_to_nixos_cache(tmp_path: Path) -> None:
+    # an omitted key still queries the official cache, so a path already on
+    # cache.nixos.org is skipped without any rule file configuration
+    rules = load(_write(tmp_path, ""))
+    assert rules.substituters == frozenset({_NIXOS_CACHE})
+
+
+def test_load_substituters_union_keeps_nixos_cache(tmp_path: Path) -> None:
+    rules = load(_write(tmp_path, 'substituters = ["https://cache.ysun.co"]\n'))
+    assert rules.substituters == frozenset({"https://cache.ysun.co", _NIXOS_CACHE})
+
+
+def test_load_substituters_dedups_explicit_nixos_cache(tmp_path: Path) -> None:
+    rules = load(
+        _write(
+            tmp_path,
+            'substituters = ["https://cache.nixos.org", "https://cache.ysun.co"]\n',
+        )
+    )
+    assert rules.substituters == frozenset({_NIXOS_CACHE, "https://cache.ysun.co"})
+
+
+def _write(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "atelier.toml"
+    path.write_text(body)
+    return path
 
 
 def test_prunable_excludes_groups_by_set_and_system() -> None:

@@ -1,7 +1,7 @@
 import json
 import re
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from atelier.types import CONFIG_SETS, PER_SYSTEM_SETS, RUNNERS, SKIP_PATTERN, Job
@@ -95,6 +95,36 @@ def _build_select(
     )
 
 
+def _eval_command(
+    flake: str, select: str, workers: int, substituters: Iterable[str]
+) -> list[str]:
+    """The nix-eval-jobs argv, checking cache status against `substituters`.
+
+    `--check-cache-status` tags each attribute with whether its outputs are
+    already in a queried cache (a `cacheStatus` field), so discovery can skip
+    building cached ones. The caches are sorted for a stable command, and
+    `require-sigs` is disabled because an existence check only asks whether the
+    path is in the cache, not whether this host trusts the cache's signing key:
+    the runner never imports these paths, and an untrusted hit would otherwise be
+    ignored (nix-eval-jobs reads no flake `nixConfig`, so the keys are unknown).
+    """
+    cmd = [
+        "nix", "run", "nixpkgs#nix-eval-jobs", "--",
+        "--flake", flake,
+        "--force-recurse",
+        "--check-cache-status",
+        "--workers", str(workers),
+    ]
+    caches = sorted(substituters)
+    if caches:
+        cmd += [
+            "--option", "extra-substituters", " ".join(caches),
+            "--option", "require-sigs", "false",
+        ]
+    cmd += ["--select", select]
+    return cmd
+
+
 def evaluate(
     flake: str,
     systems: Sequence[str],
@@ -102,6 +132,7 @@ def evaluate(
     config_sets: Sequence[str],
     workers: int = 4,
     exclude_leaves: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
+    substituters: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     """Run nix-eval-jobs over the rooted output sets and return one object per attr.
 
@@ -109,15 +140,10 @@ def evaluate(
     field and never abort the run. A non zero exit is a fatal evaluation failure
     of the whole flake and is raised. `exclude_leaves` names attributes pruned
     before recursion so they are never evaluated, fetched, or built.
+    `substituters` are the caches each attribute's cache status is checked against.
     """
     select = _build_select(systems, per_system_sets, config_sets, exclude_leaves)
-    cmd = [
-        "nix", "run", "nixpkgs#nix-eval-jobs", "--",
-        "--flake", flake,
-        "--force-recurse",
-        "--workers", str(workers),
-        "--select", select,
-    ]
+    cmd = _eval_command(flake, select, workers, substituters)
     # capture stdout (the json results) but let stderr stream to the log live,
     # so fetches, getFlake calls, and per-attr eval progress are visible instead
     # of buffered until the end, where a slow eval looks like a frozen run
@@ -136,6 +162,10 @@ def to_job(obj: dict[str, Any]) -> Job:
     path = ".".join(obj.get("attrPath") or [])
     drv = obj.get("drvPath")
     error = obj.get("error")
+    # "cached" (set by --check-cache-status) means every output is in a queried
+    # binary cache. "local" (this runner's store only) and "notBuilt" are not
+    # cross-runner safe, so only an outright "cached" is treated as cached.
+    cached = obj.get("cacheStatus") == "cached"
     set_name = path.split(".")[0] if path else ""
 
     if set_name in CONFIG_SETS:
@@ -146,7 +176,9 @@ def to_job(obj: dict[str, Any]) -> Job:
         system = segments[1] if len(segments) > 1 else (obj.get("system") or "")
         installable = f".#{path}" if drv else ""
 
-    return Job(path=path, system=system, installable=installable, error=error)
+    return Job(
+        path=path, system=system, installable=installable, error=error, cached=cached
+    )
 
 
 def clean_error(error: str) -> str:

@@ -85,6 +85,12 @@ def _skip(job: Job) -> Skipped:
     return Skipped(system=job.system, label=job.path, reason=nix.clean_error(job.error or ""))
 
 
+def _cached_skip(job: Job) -> Skipped:
+    return Skipped(
+        system=job.system, label=job.path, reason="Already in the binary cache"
+    )
+
+
 def _chunks(cells: Sequence[Cell]) -> list[Chunk]:
     """Slice cells into <=256 groups, one reusable build call each."""
     groups = [cells[i : i + MATRIX_CHUNK] for i in range(0, len(cells), MATRIX_CHUNK)]
@@ -108,7 +114,9 @@ def discover(
 
     Successful and genuinely failing attrs become build cells (a failing cell
     reports the eval error). Attrs whose error denotes an expected unbuildable
-    state become skipped checks. Manual excludes are dropped before either.
+    state become skipped checks. An attr already in a queried binary cache is
+    skipped too, so no runner builds or re-pushes it. Manual excludes are dropped
+    before either.
     """
     effective = _effective_systems(rules, enabled_systems)
     per_system, configs = _output_sets(rules)
@@ -116,13 +124,22 @@ def discover(
         return [], []
 
     objects = nix.evaluate(
-        f"{flake}#", effective, per_system, configs, workers, prunable_excludes(rules)
+        f"{flake}#",
+        effective,
+        per_system,
+        configs,
+        workers,
+        prunable_excludes(rules),
+        rules.substituters,
     )
     jobs = [nix.to_job(obj) for obj in objects]
     selected = _selected(jobs, rules, effective, only)
 
-    succeeded = [job for job in selected if job.error is None]
     failed = [job for job in selected if job.error is not None]
+    # a cached attr evaluated fine; split it off the buildable ones so its outputs
+    # are not rebuilt and re-pushed when a runner could only substitute them
+    buildable = [job for job in selected if job.error is None and not job.cached]
+    cached = [job for job in selected if job.error is None and job.cached]
     skipped = [job for job in failed if nix.is_skippable(job.error or "")]
     genuine = [job for job in failed if not nix.is_skippable(job.error or "")]
 
@@ -133,5 +150,9 @@ def discover(
         for pattern in rules.exclude
     ]
 
-    cells = [_cell(job) for job in (*succeeded, *genuine)]
-    return _chunks(cells), [*(_skip(job) for job in skipped), *excluded_skips]
+    cells = [_cell(job) for job in (*buildable, *genuine)]
+    return _chunks(cells), [
+        *(_skip(job) for job in skipped),
+        *(_cached_skip(job) for job in cached),
+        *excluded_skips,
+    ]

@@ -8,3 +8,7 @@
 # build the flake's own package and dev shell on every target
 systems = ["x86_64-linux", "aarch64-linux", "aarch64-darwin"]
 include = ["packages.*.*", "devShells.*.default"]
+
+# caches checked before building; an attribute already in any of them is skipped
+# rather than built and pushed. the official cache is always checked on top.
+substituters = ["https://cache.ysun.co"]

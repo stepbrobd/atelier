@@ -1,4 +1,4 @@
-from atelier.nix import _build_select, clean_error, is_skippable, to_job
+from atelier.nix import _build_select, _eval_command, clean_error, is_skippable, to_job
 
 
 def test_per_system_leaf() -> None:
@@ -51,6 +51,71 @@ def test_config_uses_toplevel_installable() -> None:
     assert job.path == "nixosConfigurations.baldy"
     assert job.system == "x86_64-linux"
     assert job.installable == ".#nixosConfigurations.baldy.config.system.build.toplevel"
+
+
+def test_to_job_marks_cached_when_substitutable() -> None:
+    job = to_job(
+        {
+            "attrPath": ["packages.x86_64-linux", "hello"],
+            "drvPath": "/nix/store/x.drv",
+            "system": "x86_64-linux",
+            "cacheStatus": "cached",
+        }
+    )
+    assert job.cached is True
+
+
+def test_to_job_not_cached_when_not_built() -> None:
+    job = to_job(
+        {
+            "attrPath": ["packages.x86_64-linux", "hello"],
+            "drvPath": "/nix/store/x.drv",
+            "cacheStatus": "notBuilt",
+        }
+    )
+    assert job.cached is False
+
+
+def test_to_job_local_is_not_cached() -> None:
+    # "local" is present only in this runner's store, not in a shared cache, so a
+    # build on a different runner could not substitute it; it must still build
+    job = to_job(
+        {
+            "attrPath": ["packages.x86_64-linux", "hello"],
+            "drvPath": "/nix/store/x.drv",
+            "cacheStatus": "local",
+        }
+    )
+    assert job.cached is False
+
+
+def test_to_job_not_cached_when_status_absent() -> None:
+    job = to_job(
+        {"attrPath": ["packages.x86_64-linux", "hello"], "drvPath": "/nix/store/x.drv"}
+    )
+    assert job.cached is False
+
+
+def test_eval_command_requests_cache_status() -> None:
+    assert "--check-cache-status" in _eval_command("flake#", "SELECT", 2, frozenset())
+
+
+def test_eval_command_passes_sorted_substituters() -> None:
+    cmd = _eval_command(
+        "flake#",
+        "SELECT",
+        2,
+        frozenset({"https://cache.ysun.co", "https://cache.nixos.org"}),
+    )
+    value = cmd[cmd.index("extra-substituters") + 1]
+    assert value == "https://cache.nixos.org https://cache.ysun.co"
+    # an untrusted cache's signature is irrelevant to a mere existence check, so
+    # the check must not require a trusted signature or it would miss the path
+    assert cmd[cmd.index("require-sigs") + 1] == "false"
+
+
+def test_eval_command_omits_substituters_when_none() -> None:
+    assert "extra-substituters" not in _eval_command("flake#", "SELECT", 2, frozenset())
 
 
 def test_unsupported_platform_is_skippable() -> None:

@@ -17,6 +17,10 @@ DEFAULT_RUNNER: Final[str] = "ubuntu-latest"
 DEFAULT_SYSTEMS: Final[tuple[str, ...]] = ("x86_64-linux",)
 DEFAULT_INCLUDE: Final[tuple[str, ...]] = ("packages.*.*", "devShells.*.default")
 
+# always queried for cache status, even when the rule file names no substituter,
+# so a path already on the official cache is skipped without configuration
+NIXOS_CACHE: Final[str] = "https://cache.nixos.org"
+
 # output sets enumerated per system, addressed as <set>.<system>.<rest>
 PER_SYSTEM_SETS: Final[frozenset[str]] = frozenset(
     {"packages", "legacyPackages", "checks", "devShells"}
@@ -54,6 +58,10 @@ class Rules:
     systems: tuple[str, ...]
     include: tuple[str, ...]
     exclude: tuple[str, ...]
+    # binary caches checked for an attribute's outputs before building it; a set
+    # so duplicates collapse. `load` always folds in the official cache. An
+    # attribute already in any of these is skipped rather than built and pushed.
+    substituters: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -64,12 +72,15 @@ class Job:
     `path` is the full flake attribute, e.g. ``legacyPackages.x86_64-linux.caddy``.
     `installable` is the buildable flake reference, empty when evaluation failed.
     `error` carries the eval error text, ``None`` on success.
+    `cached` is true when every output is already in a queried binary cache, so a
+    build runner would only substitute it; such an attribute is skipped.
     """
 
     path: str
     system: str
     installable: str
     error: str | None
+    cached: bool = False
 
 
 @dataclass(frozen=True)
