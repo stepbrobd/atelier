@@ -11,6 +11,32 @@ from atelier.rules import load
 _PROG = "atelier"
 _CTX = {"help_option_names": ["-h", "--help"]}
 
+# nix-eval-jobs caps each worker at 4 GiB by default (--max-memory-size), so the
+# aggregate eval memory is workers x 4 GiB. Size the default off RAM, not the CPU
+# count, since the core count says nothing about that OOM ceiling.
+_WORKER_GIB = 4
+# used only when the host's RAM is unreadable; matches the workflow's safe default
+_FALLBACK_WORKERS = 2
+
+
+def _workers_for_memory(total_bytes: int) -> int:
+    """Workers whose 4 GiB budgets fit in RAM, less one for OS and driver headroom.
+
+    Always returns at least 1, so a small host still evaluates (without
+    parallelism) rather than getting a nonsensical zero or negative count.
+    """
+    gib = total_bytes // 1024**3
+    return max(1, gib // _WORKER_GIB - 1)
+
+
+def _default_workers() -> int:
+    """Memory-aware default for ``--workers``; falls back if RAM is undetectable."""
+    try:
+        total = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+    except AttributeError, ValueError, OSError:
+        return _FALLBACK_WORKERS
+    return _workers_for_memory(total)
+
 
 @click.group(name=_PROG, context_settings=_CTX)
 @click.version_option(_pkg_version("atelier"), "-v", "--version", prog_name=_PROG)
@@ -53,10 +79,10 @@ def cli() -> None:
 @click.option(
     "--workers",
     type=click.IntRange(1),
-    default=os.cpu_count() or 4,
+    default=_default_workers(),
     show_default=True,
-    help="Number of nix-eval-jobs workers (defaults to the detected CPU count). "
-    "Evaluation is I/O bound, so oversubscribing past the core count is fine.",
+    help="Number of nix-eval-jobs workers (defaults to one per 4 GiB of RAM, "
+    "minus one for headroom, since each worker may use up to 4 GiB).",
 )
 def discover(
     rules_path: Path, flake: str, systems: str, only: str, workers: int
