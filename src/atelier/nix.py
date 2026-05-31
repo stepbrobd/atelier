@@ -53,7 +53,7 @@ def _nix_list(items: Sequence[str]) -> str:
 
 
 def _nix_excludes(exclude_leaves: Mapping[str, Mapping[str, Sequence[str]]]) -> str:
-    """Render ``"set" = { "sys" = [ "leaf" … ]; … };`` for the ``excludes`` attrset.
+    """Render ``"set" = { "sys" = [ "leaf" ... ]; ... };`` for the ``excludes`` attrset.
 
     ``sys`` is either ``"*"`` (drop from every system) or a specific system.
     """
@@ -109,17 +109,26 @@ def _eval_command(
     ignored (nix-eval-jobs reads no flake `nixConfig`, so the keys are unknown).
     """
     cmd = [
-        "nix", "run", "nixpkgs#nix-eval-jobs", "--",
-        "--flake", flake,
+        "nix",
+        "run",
+        "nixpkgs#nix-eval-jobs",
+        "--",
+        "--flake",
+        flake,
         "--force-recurse",
         "--check-cache-status",
-        "--workers", str(workers),
+        "--workers",
+        str(workers),
     ]
     caches = sorted(substituters)
     if caches:
         cmd += [
-            "--option", "extra-substituters", " ".join(caches),
-            "--option", "require-sigs", "false",
+            "--option",
+            "extra-substituters",
+            " ".join(caches),
+            "--option",
+            "require-sigs",
+            "false",
         ]
     cmd += ["--select", select]
     return cmd
