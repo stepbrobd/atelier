@@ -96,7 +96,12 @@ jobs:
           # push to every configured backend, best-effort: each runs in its own
           # subshell so one cannot abort the others, and a failed push only warns
           # (the artifact is already built, so a cache upload hiccup must not fail
-          # the build)
+          # the build). drop -e here so a failing backend falls through to the
+          # next; each subshell still runs set -euo pipefail, effective only
+          # because it runs as a plain statement whose status we read with $? -
+          # a "( set -e ... ) || warn" would disable that inner set -e (bash
+          # ignores -e set inside a command on the left of ||)
+          set +e
 
           if [ -n "${ATTIC_SERVER}" ] && [ -n "${ATTIC_CACHE}" ]; then
             (
@@ -107,7 +112,9 @@ jobs:
               attic cache info "${ATTIC_CACHE}" || { echo "::warning::Attic cache unavailable, skipping"; exit 0; }
               # shellcheck disable=SC2086
               attic push "${ATTIC_CACHE}" $paths
-            ) || echo "::warning::Attic push failed"
+            )
+            # shellcheck disable=SC2181
+            [ $? -eq 0 ] || echo "::warning::Attic push failed"
           fi
 
           if [ -n "${CACHIX_CACHE}" ]; then
@@ -117,7 +124,9 @@ jobs:
               [ -n "${CACHIX_SIGNING_KEY:-}" ] || unset CACHIX_SIGNING_KEY
               # shellcheck disable=SC2086
               printf '%s\n' $paths | cachix push "${CACHIX_CACHE}"
-            ) || echo "::warning::Cachix push failed"
+            )
+            # shellcheck disable=SC2181
+            [ $? -eq 0 ] || echo "::warning::Cachix push failed"
           fi
 
           if [ -n "${NIKS3_SERVER}" ]; then
@@ -152,7 +161,9 @@ jobs:
               else
                 echo "::warning::Skipping niks3 push: OIDC needs 'id-token: write' in the caller workflow"
               fi
-            ) || echo "::warning::niks3 push failed"
+            )
+            # shellcheck disable=SC2181
+            [ $? -eq 0 ] || echo "::warning::niks3 push failed"
           fi
 
       - name: Upload Log
