@@ -1,6 +1,14 @@
 # Atelier
 
-The real CI for Nix, now on GitHub Actions.
+The real CI for Nix, now on GitHub Actions!
+
+Inspired by [nixpkgs-review-gha](https://github.com/Defelo/nixpkgs-review-gha)
+and [garnix](https://github.com/garnix-io/garnix-ci) (RIP).
+
+The `atelier` name is stolen from
+[とんがり帽子のアトリエ](https://tongari-anime.com)'s English localization
+(great manga/anime btw, I caught up with the manga in a little less than a week,
+that's how good it is).
 
 Atelier evaluates a flake and fans out one native build per derivation across
 GitHub-hosted runners, each surfaced as its own check run with live logs. An
@@ -43,8 +51,8 @@ an omitted key) falls back to the defaults below, so a repository with no
 
 Before building, atelier checks each attribute's outputs against `substituters`
 (the official cache `https://cache.nixos.org` is always added, deduplicated). An
-attribute already present in any of them is reported as a skipped check —
-`already in the binary cache` — rather than built, so no runner is spun up to
+attribute already present in any of them is reported as a skipped check
+`Already in the binary cache` rather than built, so no runner is spun up to
 rebuild and re-push a path the cache already holds. Only outputs available from
 a shared cache are skipped; a path present solely on the eval runner still
 builds, since another runner could not substitute it.
