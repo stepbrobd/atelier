@@ -136,27 +136,42 @@ Add an `atelier.toml` to your repository root, then a thin workflow that calls
 atelier:
 
 ```yaml
-# .github/workflows/atelier.yaml
-name: Atelier
+# .github/workflows/ci.yaml
+name: CI
 on:
   push:
+    # what's your branch name?
     branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
+  # required:
   contents: read
-  checks: write # so skipped-attribute checks can be posted
-  id-token: write # so niks3 can push via OIDC (omit if you use NIKS3_TOKEN)
+
+  # required:
+  # so skipped-attribute checks can be posted
+  checks: write
+
+  # optional:
+  # so niks3 can push via OIDC (omit if you use NIKS3_TOKEN)
+  # id-token: write
 
 jobs:
   atelier:
     uses: stepbrobd/atelier/.github/workflows/discover.yaml@master
-    secrets:
-      ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
-      NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
+
+    # uncomment the ones you need:
+    # without the secrets this job will build everything from scratch
+    # on every trigger and will not push to cache
+    # set a cache end point (preferable matching the one in `atelier.toml`)
+    # so that jobs can be skipped if they already exist in cache
+
+    # secrets:
+    #   ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
+    #   CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    #   CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
+    #   NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
 ```
 
 Map only the cache secrets you use. `secrets: inherit` is a tempting shortcut,
