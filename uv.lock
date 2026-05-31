@@ -4,7 +4,7 @@ requires-python = ">=3.14"
 
 [[package]]
 name = "atelier"
-version = "2026.531.0"
+version = "2026.531.1"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
