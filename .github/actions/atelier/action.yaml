@@ -49,6 +49,12 @@ runs:
       with:
         # build-dir in /nix works around nothing-but-nix issue 18
         extra-conf: |
+          # authenticate github api calls so flake fetches (github: refs, the
+          # nixpkgs registry, the niks3 install) get the 5000/hr token limit
+          # instead of the 60/hr unauthenticated one shared across runner ips,
+          # which 403s intermittently; the installer's own github-token does not
+          # configure this for later nix invocations
+          access-tokens = github.com=${{ github.token }}
           accept-flake-config = true
           experimental-features = nix-command flakes
           build-dir = /nix/build
