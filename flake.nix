@@ -5,7 +5,25 @@
     perSystem = { lib, pkgs, ... }:
       let
         python = pkgs.python314;
-        workspace = inputs.pypuv.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+
+        src =
+          with lib.fileset;
+          toSource {
+            root = ./.;
+            fileset = unions [
+              # code
+              ./src
+              ./tests
+              # meta
+              ./license.txt
+              ./pyproject.toml
+              ./readme.md
+              ./uv.lock
+            ];
+          };
+
+        workspace = inputs.pypuv.lib.workspace.loadWorkspace { workspaceRoot = src; };
+
         pythonPackages = (pkgs.callPackage inputs.pyp.build.packages { inherit python; }).overrideScope (
           lib.composeManyExtensions [
             inputs.pypbs.overlays.wheel
