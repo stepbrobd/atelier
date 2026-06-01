@@ -253,6 +253,8 @@ jobs:
 
 Do note that Lix names the pipe-operator feature `pipe-operator` (singular),
 whereas upstream Nix names it `pipe-operators` (plural). Match your installer!
+See more about the discrepancy
+[here](https://discourse.nixos.org/t/lix-mismatch-in-feature-name-compared-to-nix/59879).
 
 A custom `install-command` runs on a fresh runner, so it must be non-interactive
 and install a working multi-user daemon. Atelier reloads the daemon after
