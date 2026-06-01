@@ -16,6 +16,16 @@ on:
         required: false
         default: false
         type: boolean
+      install-command:
+        description: Shell command that installs Nix; empty uses the built-in installer
+        required: false
+        default: ""
+        type: string
+      extra-conf:
+        description: Extra nix.conf lines appended after the required settings
+        required: false
+        default: ""
+        type: string
     secrets:
       ATTIC_TOKEN:
         required: false
@@ -66,6 +76,8 @@ jobs:
         uses: stepbrobd/atelier/.github/actions/atelier@master
         with:
           system: ${{ matrix.system }}
+          install-command: ${{ inputs.install-command }}
+          extra-conf: ${{ inputs.extra-conf }}
 
       - name: Build
         if: ${{ matrix.installable != '' }}

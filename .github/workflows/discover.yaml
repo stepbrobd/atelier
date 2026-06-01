@@ -40,6 +40,14 @@ on:
         description: Eval workers; each may use ~4 GiB, keep workers x 4 GiB under runner RAM
         type: number
         default: 2
+      install-command:
+        description: Shell command that installs Nix; empty uses the built-in installer
+        type: string
+        default: ""
+      extra-conf:
+        description: Extra nix.conf lines appended after the required settings
+        type: string
+        default: ""
   # downstream repos consume atelier by calling this workflow; the inputs mirror
   # workflow_dispatch so the generate step reads them the same way
   workflow_call:
@@ -76,6 +84,14 @@ on:
         description: Eval workers; each may use ~4 GiB, keep workers x 4 GiB under runner RAM
         type: number
         default: 2
+      install-command:
+        description: Shell command that installs Nix; empty uses the built-in installer
+        type: string
+        default: ""
+      extra-conf:
+        description: Extra nix.conf lines appended after the required settings
+        type: string
+        default: ""
     secrets:
       ATTIC_TOKEN:
         required: false
@@ -112,6 +128,8 @@ jobs:
         with:
           system: x86_64-linux
           reclaim: "false"
+          install-command: ${{ inputs.install-command }}
+          extra-conf: ${{ inputs.extra-conf }}
 
       - name: Generate Matrix
         id: gen
@@ -166,6 +184,8 @@ jobs:
     with:
       cells: ${{ matrix.cells }}
       push: ${{ inputs.push || false }}
+      install-command: ${{ inputs.install-command }}
+      extra-conf: ${{ inputs.extra-conf }}
     secrets:
       ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
