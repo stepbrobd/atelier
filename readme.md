@@ -37,6 +37,9 @@ Known limitations:
   but the check status will only be associated with the commit, not the PR.
   However dependabot created PRs
   [will work](https://github.com/stepbrobd/inc/pull/201/checks)
+- If you have niks3 as cache push target, consider adding
+  `https://cache.ysun.co` to the substituters list, see reasonings
+  [here](https://github.com/stepbrobd/atelier/issues/3#issuecomment-4591554271)
 
 ## Rule file
 
