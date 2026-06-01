@@ -115,9 +115,13 @@ runs:
         set -euo pipefail
         # a custom installer wrote its own /etc/nix/nix.conf, so append atelier's
         # required settings and reload the daemon for the build-time ones
-        # (sandbox, system, build-dir) to take effect
+        # (sandbox, system, build-dir) to take effect. trust the runner user too:
+        # the built-in installer adds it to trusted-users, but a custom installer
+        # may not, and without it nix ignores the flake's substituters and keys
+        # (extra-, so the installer's existing trusted-users list is kept)
         {
           echo "access-tokens = github.com=${GH_TOKEN}"
+          echo "extra-trusted-users = $(id -un)"
           printf '%s\n' "${NIX_CONF}"
         } | sudo tee -a /etc/nix/nix.conf >/dev/null
         if [ "${RUNNER_OS}" = "macOS" ]; then
