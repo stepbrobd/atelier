@@ -248,8 +248,11 @@ jobs:
     with:
       install-command: curl -sSf -L https://install.lix.systems/lix | sh -s -- install --no-confirm
       extra-conf: |
-        extra-experimental-features = pipe-operators
+        extra-experimental-features = pipe-operator
 ```
+
+Do note that Lix names the pipe-operator feature `pipe-operator` (singular),
+whereas upstream Nix names it `pipe-operators` (plural). Match your installer!
 
 A custom `install-command` runs on a fresh runner, so it must be non-interactive
 and install a working multi-user daemon. Atelier reloads the daemon after
