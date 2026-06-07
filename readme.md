@@ -2,6 +2,8 @@
 
 <img width="282" height="272" alt="Image" src="https://github.com/user-attachments/assets/f73ea161-e210-4b5e-9f37-12c03885be39" />
 
+<img width="6144" height="3444" alt="Image" src="https://github.com/user-attachments/assets/e5f3f063-a32f-4b39-a356-098fbf7f1632" />
+
 The real CI for Nix, now on GitHub Actions!
 
 Inspired by [nixpkgs-review-gha](https://github.com/Defelo/nixpkgs-review-gha)
