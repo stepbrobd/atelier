@@ -88,7 +88,8 @@ explicit `legacyPackages.*.ocamlPackages.*`.
 `packages`, `legacyPackages`, `checks` and `devShells` are addressed per system
 as `<set>.<system>.<rest>`. `nixosConfigurations` and `darwinConfigurations` are
 addressed by host as `<set>.<host>` and built through their
-`config.system.build.toplevel`.
+`config.system.build.toplevel`. `formatter` is the derivation itself per system,
+addressed as `formatter.<system>`.
 
 Manual excludes drop an attribute entirely. Broken and unsupported-platform
 attributes are detected from their eval error and reported as a skipped check
@@ -106,6 +107,7 @@ include = [
   "legacyPackages.*.*",               # top level packages
   "legacyPackages.*.ocamlPackages.*", # a nested scope
   "devShells.*.default",
+  "formatter.*",                      # the formatter derivation per system
   "nixosConfigurations.*",            # built via config.system.build.toplevel
   "darwinConfigurations.*",           # built via config.system.build.toplevel
 ]
