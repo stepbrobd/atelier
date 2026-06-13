@@ -87,18 +87,28 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    parts.url = "github:hercules-ci/flake-parts";
-    parts.inputs.nixpkgs-lib.follows = "nixpkgs";
+
+    parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
     systems.url = "github:nix-systems/triplet";
-    pyp.url = "github:pyproject-nix/pyproject.nix";
-    pyp.inputs.nixpkgs.follows = "nixpkgs";
-    pypbs.url = "github:pyproject-nix/build-system-pkgs";
-    pypbs.inputs.pyproject-nix.follows = "pyp";
-    pypbs.inputs.uv2nix.follows = "pypuv";
-    pypbs.inputs.nixpkgs.follows = "nixpkgs";
-    pypuv.url = "github:pyproject-nix/uv2nix";
-    pypuv.inputs.nixpkgs.follows = "nixpkgs";
-    pypuv.inputs.pyproject-nix.follows = "pyp";
+
+    pyp = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pypbs = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyp";
+      inputs.uv2nix.follows = "pypuv";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pypuv = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.pyproject-nix.follows = "pyp";
+    };
   };
 
   nixConfig.extra-substituters = [ "https://cache.ysun.co" ];
