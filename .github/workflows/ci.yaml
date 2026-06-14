@@ -9,6 +9,8 @@ on:
 jobs:
   Atelier:
     uses: ./.github/workflows/discover.yaml
+    with:
+      tool: .#
     permissions:
       contents: read
       checks: write
