@@ -97,7 +97,4 @@
     pypuv.inputs.nixpkgs.follows = "nixpkgs";
     pypuv.inputs.pyproject-nix.follows = "pyp";
   };
-
-  nixConfig.extra-substituters = [ "https://cache.ysun.co" ];
-  nixConfig.extra-trusted-public-keys = [ "cache.ysun.co-1:WxPYwT5g3kt9XhUhHPpNLZKI9HIOsVVAuqSHpok8Qt4=" ];
 }
