@@ -20,7 +20,7 @@ runs:
   steps:
     - name: Reclaim Disk Space (Linux)
       if: ${{ inputs.reclaim == 'true' && runner.os == 'Linux' }}
-      uses: wimpysworld/nothing-but-nix@main
+      uses: wimpysworld/nothing-but-nix@687c797a730352432950c707ab493fcc951818d7 # v10
       with:
         hatchet-protocol: rampage
 
@@ -81,7 +81,7 @@ runs:
 
     - name: Install Nix
       if: ${{ inputs.install-command == '' }}
-      uses: nixos/nix-installer-action@main
+      uses: nixos/nix-installer-action@6b8548fe06acfb0155a50ab5d561accb215764cc # 2026-04-06
       with:
         # authenticate github api calls so flake fetches (github: refs, the
         # nixpkgs registry, the niks3 install) get the 5000/hr token limit
@@ -138,7 +138,7 @@ runs:
 
     - name: Report Disk Space (Darwin)
       if: ${{ inputs.reclaim == 'true' && runner.os == 'macOS' }}
-      uses: srz-zumix/post-run-action@v3
+      uses: srz-zumix/post-run-action@42756f7452b9439d0365b7e087b2c364f54209c6 # v3.0.2
       with:
         shell: bash -e {0}
         post-run: |
