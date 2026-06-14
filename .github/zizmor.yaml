@@ -1,5 +1,3 @@
 rules:
   dependabot-cooldown:
     disable: true
-  unpinned-uses:
-    disable: true

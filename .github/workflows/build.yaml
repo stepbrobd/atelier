@@ -7,6 +7,14 @@ name: Atelier Build
 on:
   workflow_call:
     inputs:
+      repository:
+        description: Atelier repository
+        type: string
+        default: stepbrobd/atelier
+      ref:
+        description: Atelier repository Git ref
+        type: string
+        default: master
       cells:
         description: JSON matrix object for this chunk
         required: true
@@ -76,14 +84,14 @@ jobs:
 
       - name: Set Up Nix
         if: ${{ matrix.installable != '' }}
-        # full ref, not ./, so the action resolves when a downstream repo is the
-        # checkout; ./ would look in the caller and fail
-        uses: stepbrobd/atelier/.github/actions/atelier@master
+        uses: jenseng/dynamic-uses@d683d56bffbc1f36158989b5fc62288697aae27b # 2025-12-18
         with:
-          system: ${{ matrix.system }}
-          install-command: ${{ inputs.install-command }}
-          extra-conf: ${{ inputs.extra-conf }}
-          rules: ${{ inputs.rules }}
+          uses: ${{ inputs.repository }}/.github/actions/atelier@${{ inputs.ref }}
+          with: |
+            system: ${{ toJSON(matrix.system) }}
+            install-command: ${{ toJSON(inputs.install-command) }}
+            extra-conf: ${{ toJSON(inputs.extra-conf) }}
+            rules: ${{ toJSON(inputs.rules) }}
 
       - name: Build
         if: ${{ matrix.installable != '' }}

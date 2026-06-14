@@ -9,6 +9,14 @@ name: Atelier
 on:
   workflow_dispatch:
     inputs:
+      repository:
+        description: Atelier repository
+        type: string
+        default: stepbrobd/atelier
+      ref:
+        description: Atelier repository Git ref
+        type: string
+        default: master
       rules:
         description: Rule file path
         type: string
@@ -49,6 +57,14 @@ on:
   # workflow_dispatch so the generate step reads them the same way
   workflow_call:
     inputs:
+      repository:
+        description: Atelier repository
+        type: string
+        default: stepbrobd/atelier
+      ref:
+        description: Atelier repository Git ref
+        type: string
+        default: master
       rules:
         description: Rule file path
         type: string
@@ -76,7 +92,6 @@ on:
       tool:
         description: Atelier tool flake ref a caller runs, the published flake
         type: string
-        default: github:stepbrobd/atelier#
       workers:
         description: Eval workers; each may use ~4 GiB, keep workers x 4 GiB under runner RAM
         type: number
@@ -119,17 +134,17 @@ jobs:
           persist-credentials: false
 
       - name: Set Up Nix
-        # full ref, not ./, so the action resolves when a downstream repo is the
-        # checkout; ./ would look in the caller and fail
-        uses: stepbrobd/atelier/.github/actions/atelier@master
+        uses: jenseng/dynamic-uses@d683d56bffbc1f36158989b5fc62288697aae27b # 2025-12-18
         with:
-          system: x86_64-linux
-          reclaim: "false"
-          install-command: ${{ inputs.install-command }}
-          extra-conf: ${{ inputs.extra-conf }}
-          # the rule file drives the pull cache (its substituters + trusted-public-
-          # keys), injected into nix.conf so every nix install can substitute it
-          rules: ${{ inputs.rules }}
+          uses: ${{ inputs.repository }}/.github/actions/atelier@${{ inputs.ref }}
+          with: |
+            system: x86_64-linux
+            reclaim: "false"
+            install-command: ${{ toJSON(inputs.install-command) }}
+            extra-conf: ${{ toJSON(inputs.extra-conf) }}
+            # the rule file drives the pull cache (its substituters + trusted-public-
+            # keys), injected into nix.conf so every nix install can substitute it
+            rules: ${{ toJSON(inputs.rules) }}
 
       - name: Generate Matrix
         id: gen
@@ -137,9 +152,8 @@ jobs:
         env:
           RULES: ${{ inputs.rules }}
           ATTR: ${{ inputs.attr }}
-          # empty on atelier's own ci so it falls back to the local flake (.#),
-          # set to the published flake when a downstream repo calls this workflow
           TOOL: ${{ inputs.tool }}
+          TOOL_DEFAULT: github:${{ inputs.repository }}/${{ inputs.ref }}
           # nix-eval-jobs uses up to ~4 GiB per worker, so the aggregate
           # (workers x 4 GiB) must fit the runner; a low count keeps heavy
           # config toplevel evals from OOM-killing the whole runner
@@ -163,7 +177,8 @@ jobs:
             exit 0
           fi
 
-          nix run "${TOOL:-.#}" -- discover --rules "$RULES" --flake . --systems "$systems" --attr "$ATTR" --workers "${WORKERS:-2}"
+          nix run "${TOOL:-$TOOL_DEFAULT}" -- \
+            discover --rules "$RULES" --flake . --systems "$systems" --attr "$ATTR" --workers "${WORKERS:-2}"
 
   Build:
     needs: Discover
@@ -182,6 +197,8 @@ jobs:
     # callers (unlike a local action ref), so it stays relative
     uses: ./.github/workflows/build.yaml
     with:
+      repository: ${{ inputs.repository }}
+      ref: ${{ inputs.ref }}
       cells: ${{ matrix.cells }}
       push: ${{ inputs.push }}
       rules: ${{ inputs.rules }}
