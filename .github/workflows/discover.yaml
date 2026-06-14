@@ -7,9 +7,6 @@ name: Atelier
 # gate is the single stable check for branch protection
 
 on:
-  push:
-    branches: [master]
-  pull_request:
   workflow_dispatch:
     inputs:
       rules:
@@ -132,13 +129,13 @@ jobs:
           extra-conf: ${{ inputs.extra-conf }}
           # the rule file drives the pull cache (its substituters + trusted-public-
           # keys), injected into nix.conf so every nix install can substitute it
-          rules: ${{ inputs.rules || 'atelier.toml' }}
+          rules: ${{ inputs.rules }}
 
       - name: Generate Matrix
         id: gen
         shell: bash
         env:
-          RULES: ${{ inputs.rules || 'atelier.toml' }}
+          RULES: ${{ inputs.rules }}
           ATTR: ${{ inputs.attr }}
           # empty on atelier's own ci so it falls back to the local flake (.#),
           # set to the published flake when a downstream repo calls this workflow
@@ -186,8 +183,8 @@ jobs:
     uses: ./.github/workflows/build.yaml
     with:
       cells: ${{ matrix.cells }}
-      push: ${{ inputs.push || false }}
-      rules: ${{ inputs.rules || 'atelier.toml' }}
+      push: ${{ inputs.push }}
+      rules: ${{ inputs.rules }}
       install-command: ${{ inputs.install-command }}
       extra-conf: ${{ inputs.extra-conf }}
     secrets:

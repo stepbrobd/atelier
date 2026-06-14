@@ -1,0 +1,20 @@
+name: Run Atelier
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  Atelier:
+    permissions:
+      contents: read
+      # So skipped-attribute checks can be posted.
+      checks: write
+      # So niks3 can push via OIDC.
+      id-token: write
+
+    uses: ./.github/workflows/discover.yaml
+
+    secrets:
+      NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
