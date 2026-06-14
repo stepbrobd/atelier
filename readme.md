@@ -99,6 +99,11 @@ rather than a build failure.
 ### Example
 
 ```toml
+# caches checked before building; an attr already in one is skipped, not rebuilt
+# https://cache.nixos.org is always checked, so listing only your own is enough
+substituters = ["https://cache.example.org"]
+trusted-public-keys = ["cache.example.org-1:<key-content>"]
+
 # systems to evaluate and build for; omit to default to ["x86_64-linux"]
 systems = ["x86_64-linux", "aarch64-linux", "aarch64-darwin"]
 
@@ -116,10 +121,6 @@ include = [
 exclude = [
   "legacyPackages.*.spotify", # unfree
 ]
-
-# caches checked before building; an attr already in one is skipped, not rebuilt
-# https://cache.nixos.org is always checked, so listing only your own is enough
-substituters = ["https://cache.example.org"]
 ```
 
 ## Binary cache
@@ -200,6 +201,8 @@ permissions:
 
 jobs:
   Atelier:
+    # even though in this example we are using `@master`
+    # you should carefully audit this code base and pin the action to a full commit SHA
     uses: stepbrobd/atelier/.github/workflows/discover.yaml@master
 
     # uncomment the ones you need:
@@ -221,9 +224,12 @@ organization or enterprise** as atelier - across accounts it silently passes
 nothing, so an explicit map is the portable choice. Configuration **variables**
 (`vars.ATTIC_CACHE` and friends) need no passing: GitHub resolves `vars` against
 _your_ repository automatically, so your cache name, token, and the pushes all
-stay yours. Pin `@master` to track the latest, or a tag/SHA to pin a version.
-Make `Gate` the single required status in branch protection: it stays green
-whether the matrix is empty, every build passes, or attributes are skipped.
+stay yours. Pin `@master` to track the latest, or a tag/SHA (support added by
+[@JuneStepp](https://github.com/JuneStepp) in
+[stepbrobd/atelier#15](https://github.com/stepbrobd/atelier/pull/15)) to pin a
+version. Make `Gate` the single required status in branch protection: it stays
+green whether the matrix is empty, every build passes, or attributes are
+skipped.
 
 ## Custom Nix installer
 
