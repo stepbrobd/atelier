@@ -2,6 +2,7 @@ import json
 import sys
 from collections.abc import Sequence
 from dataclasses import asdict
+from urllib.parse import quote
 
 from atelier import nix
 from atelier.rules import excluded, included, matches, prunable_excludes
@@ -77,6 +78,19 @@ def _selected(
     return out
 
 
+def _log_name(label: str) -> str:
+    """
+    An artifact safe upload name for build cell's log.
+
+    A flake attribute can hold any character: quoted names carry slashes, dots, or
+    unicode (e.g. ``checks.<sys>."a/b.c"`` or a freeform ``out.<sys>.a."b.c"``), and
+    nested sets like ``legacyPackages`` go arbitrarily deep.
+
+    GitHub artifact name forbids ``/ " : < > | * ? \\`` and newlines.
+    """
+    return f"log-{quote(label, safe='')}"
+
+
 def _cell(job: Job) -> Cell:
     return Cell(
         system=job.system,
@@ -84,6 +98,7 @@ def _cell(job: Job) -> Cell:
         label=job.path,
         installable=job.installable,
         error=nix.clean_error(job.error) if job.error else "",
+        log=_log_name(job.path),
     )
 
 

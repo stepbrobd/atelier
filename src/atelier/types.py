@@ -99,6 +99,7 @@ class Cell:
     label: str
     installable: str
     error: str
+    log: str
 
 
 @dataclass(frozen=True)

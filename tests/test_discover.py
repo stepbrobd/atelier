@@ -6,6 +6,7 @@ from atelier.discover import (
     _cell,
     _chunks,
     _effective_systems,
+    _log_name,
     _output_sets,
     _selected,
     discover,
@@ -84,9 +85,26 @@ def test_cell_uses_default_runner_when_system_unknown() -> None:
 
 def _cells(count: int) -> list[Cell]:
     return [
-        Cell("x86_64-linux", "ubuntu-latest", f"p{i}", f".#p{i}", "")
+        Cell("x86_64-linux", "ubuntu-latest", f"p{i}", f".#p{i}", "", f"log-p{i}")
         for i in range(count)
     ]
+
+
+def test_log_name_is_artifact_safe() -> None:
+    # ordinary names pass through unchanged (dots and dashes are valid)
+    assert (
+        _log_name("legacyPackages.x86_64-linux.python3.11")
+        == "log-legacyPackages.x86_64-linux.python3.11"
+    )
+    # a slash in a quoted attribute name is encoded, never left in the artifact name
+    assert _log_name("checks.x86_64-linux.a/b/c") == "log-checks.x86_64-linux.a%2Fb%2Fc"
+    assert all(c not in _log_name("checks.x86_64-linux.a/b/c") for c in '/":<>|*?\\')
+    # unicode (e.g. a freeform attr) encodes to an ascii-only name
+    encoded = _log_name("out.x86_64-linux.the.best.とんがり帽子のアトリエ")
+    assert encoded.isascii()
+    # distinct labels never collide: a quoted slash stays distinct from a dot/underscore
+    assert _log_name("a/b") != _log_name("a.b") != _log_name("a_b")
+    assert _log_name("a/b") != _log_name("a_b")
 
 
 def test_cached_skip_reason_is_sentence_cased() -> None:

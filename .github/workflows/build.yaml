@@ -194,8 +194,7 @@ jobs:
         if: ${{ always() && matrix.installable != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          # the label is the flake attribute, unique per cell across all chunks
-          # strategy.job-index resets per chunk so it would collide otherwise
-          name: log-${{ matrix.label }}
+          # percent encoded attribute path
+          name: ${{ matrix.log }}
           path: build.log
           if-no-files-found: ignore
