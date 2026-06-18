@@ -1,7 +1,21 @@
 from pathlib import Path
 
-from atelier.rules import defaults, excluded, included, load, matches, prunable_excludes
-from atelier.types import DEFAULT_INCLUDE, DEFAULT_SYSTEMS, NIXOS_CACHE, Rules
+from atelier.rules import (
+    defaults,
+    excluded,
+    include_max_depth,
+    included,
+    load,
+    matches,
+    prunable_excludes,
+)
+from atelier.types import (
+    DEFAULT_INCLUDE,
+    DEFAULT_SYSTEMS,
+    MAX_RECURSE_DEPTH,
+    NIXOS_CACHE,
+    Rules,
+)
 
 
 def test_single_level_star_stops_at_dot() -> None:
@@ -32,6 +46,45 @@ def test_exact_and_segment_count() -> None:
     assert matches("nixosConfigurations.baldy", "nixosConfigurations.baldy")
     assert not matches("nixosConfigurations.baldy", "nixosConfigurations.butte")
     assert not matches("a.b", "a.b.c")
+
+
+def test_globstar_spans_any_depth() -> None:
+    # ** matches a package at any nesting under a system, so a single rule covers
+    # a re-exported scope's members however deeply they sit
+    assert matches(
+        "legacyPackages.*.**", "legacyPackages.x86_64-linux.rocqPackages_9_2.iris"
+    )
+    assert matches("legacyPackages.*.**", "legacyPackages.x86_64-linux.caddy")
+    assert matches(
+        "legacyPackages.*.**",
+        "legacyPackages.x86_64-linux.a.b.c.d.e",
+    )
+
+
+def test_globstar_matches_zero_segments() -> None:
+    # ** absorbs zero segments too, so a.** matches the bare prefix
+    assert matches("a.**", "a")
+    assert matches("a.**", "a.b")
+
+
+def test_globstar_in_the_middle() -> None:
+    assert matches("a.**.z", "a.z")
+    assert matches("a.**.z", "a.b.c.z")
+    assert not matches("a.**.z", "a.b.c")
+
+
+def test_include_max_depth_counts_segments() -> None:
+    rules = Rules(
+        systems=(),
+        include=("legacyPackages.*.*", "legacyPackages.*.rocqPackages_9_2.*"),
+        exclude=(),
+    )
+    assert include_max_depth(rules) == 4
+
+
+def test_include_max_depth_globstar_hits_cap() -> None:
+    rules = Rules(systems=(), include=("legacyPackages.*.**",), exclude=())
+    assert include_max_depth(rules) == MAX_RECURSE_DEPTH
 
 
 _RULES = Rules(

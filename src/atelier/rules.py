@@ -6,6 +6,7 @@ from typing import Any
 from atelier.types import (
     DEFAULT_INCLUDE,
     DEFAULT_SYSTEMS,
+    MAX_RECURSE_DEPTH,
     NIXOS_CACHE,
     PER_SYSTEM_SETS,
     Rules,
@@ -44,20 +45,54 @@ def defaults() -> Rules:
     return _build({})
 
 
+def _match_segments(pat: list[str], seg: list[str]) -> bool:
+    """Match a list of glob segments against a list of path segments.
+
+    A bare ``*`` spans exactly one segment; a ``**`` spans zero or more whole
+    segments (so the match backtracks over how many it absorbs). Within a single
+    segment ``fnmatch`` metacharacters apply as usual.
+    """
+    if not pat:
+        return not seg
+    head, *rest = pat
+    if head == "**":
+        # ``**`` consumes zero segments here, or one and stays to absorb more
+        return _match_segments(rest, seg) or (
+            bool(seg) and _match_segments(pat, seg[1:])
+        )
+    return (
+        bool(seg)
+        and fnmatch.fnmatchcase(seg[0], head)
+        and _match_segments(rest, seg[1:])
+    )
+
+
 def matches(pattern: str, path: str) -> bool:
     """Match a dotted glob against a flake attribute path.
 
-    Matching is segment wise with an equal segment count, so a bare ``*`` spans
-    exactly one segment and a nested scope needs its own segment. Thus
-    ``legacyPackages.*.*`` matches ``legacyPackages.x86_64-linux.caddy`` but not
+    Matching is segment wise, so a bare ``*`` spans exactly one segment and a
+    nested scope needs its own segment. Thus ``legacyPackages.*.*`` matches
+    ``legacyPackages.x86_64-linux.caddy`` but not
     ``legacyPackages.x86_64-linux.ocamlPackages.dune``, which needs the explicit
-    ``legacyPackages.*.ocamlPackages.*``.
+    ``legacyPackages.*.ocamlPackages.*``. A ``**`` segment spans any depth, so
+    ``legacyPackages.*.**`` matches a package at any nesting under a system.
     """
-    pat = pattern.split(".")
-    seg = path.split(".")
-    if len(pat) != len(seg):
-        return False
-    return all(fnmatch.fnmatchcase(s, p) for p, s in zip(pat, seg, strict=True))
+    return _match_segments(pattern.split("."), path.split("."))
+
+
+def include_max_depth(rules: Rules) -> int:
+    """Deepest attribute path the include globs can match, for the eval recursion.
+
+    A ``**`` segment matches arbitrarily deep, so a pattern containing one raises
+    the depth to the hard cap. Returns at least 1 so an empty include never asks
+    for a zero or negative recursion budget.
+    """
+    best = 1
+    for pattern in rules.include:
+        segments = pattern.split(".")
+        depth = MAX_RECURSE_DEPTH if "**" in segments else len(segments)
+        best = max(best, depth)
+    return min(best, MAX_RECURSE_DEPTH)
 
 
 def included(path: str, rules: Rules) -> bool:

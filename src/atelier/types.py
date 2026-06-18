@@ -36,6 +36,29 @@ LEAF_SETS: Final[frozenset[str]] = frozenset({"formatter"})
 # github caps a single matrix at 256 jobs, the matrix is chunked to stay under it
 MATRIX_CHUNK: Final[int] = 256
 
+# scope-internal attribute names that are never buildable derivations. the select
+# expression drops these before recursing, so a re-exported nixpkgs package set
+# (e.g. legacyPackages.<sys>.rocqPackages_9_2) does not drag nix-eval-jobs into
+# the whole `lib`, the spliced package sets, or the scope's `pkgs`. function
+# valued plumbing (callPackage, newScope, overrideScope, ...) and self
+# referential aliases (marked recurseForDerivations = false) are dropped
+# structurally by the select itself, so only the attrset valued plumbing that
+# carries no such marker needs naming here. these names never collide with a real
+# nixpkgs package, so denylisting them cannot hide a buildable attribute.
+SCOPE_DENYLIST: Final[tuple[str, ...]] = (
+    "lib",
+    "pkgs",
+    "buildPackages",
+    "targetPackages",
+    "__splicedPackages",
+    "__attrsFailEvaluation",
+)
+
+# hard ceiling on select-expression recursion depth. a `**` include glob is
+# unbounded by design, so it recurses to this cap; it is also a backstop against
+# a self-referential scope the recurseForDerivations = false check fails to catch
+MAX_RECURSE_DEPTH: Final[int] = 12
+
 # an eval error matching this denotes an expected unbuildable attribute
 # (wrong platform, broken, unfree, insecure) which becomes a skipped check
 # rather than a failure

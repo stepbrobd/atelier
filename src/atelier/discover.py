@@ -5,7 +5,13 @@ from dataclasses import asdict
 from urllib.parse import quote
 
 from atelier import nix
-from atelier.rules import excluded, included, matches, prunable_excludes
+from atelier.rules import (
+    excluded,
+    include_max_depth,
+    included,
+    matches,
+    prunable_excludes,
+)
 from atelier.types import (
     CONFIG_SETS,
     DEFAULT_RUNNER,
@@ -153,6 +159,7 @@ def discover(
         workers,
         prunable_excludes(rules),
         rules.substituters,
+        include_max_depth(rules),
     )
     jobs = [nix.to_job(obj) for obj in objects]
     selected = _selected(jobs, rules, effective, only)

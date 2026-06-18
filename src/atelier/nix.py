@@ -7,8 +7,10 @@ from typing import Any
 from atelier.types import (
     CONFIG_SETS,
     LEAF_SETS,
+    MAX_RECURSE_DEPTH,
     PER_SYSTEM_SETS,
     RUNNERS,
+    SCOPE_DENYLIST,
     SKIP_PATTERN,
     Job,
 )
@@ -17,9 +19,14 @@ _SKIP_RE = re.compile(SKIP_PATTERN, re.IGNORECASE)
 
 # embedded nix that roots the requested output sets into one attrset for
 # nix-eval-jobs to recurse
-#   per system sets become   "<set>.<system>" = flake.<set>.<system>
+#   per system sets become   "<set>.<system>" = sanitize flake.<set>.<system>
 #   config sets become       "<set>"          = mapAttrs toplevel flake.<set>
 #   leaf sets become         "<set>.<system>" = flake.<set>.<system> (a drv)
+# per system sets are sanitized first: a re-exported nixpkgs package set carries
+# scope plumbing (the whole `lib`, callPackage/newScope functions, a self
+# referential alias) that force-recurse would otherwise dive into, burning the
+# runner's memory until it is OOM killed. sanitize prunes that plumbing and bounds
+# the recursion to the include globs' depth, leaving only buildable leaves.
 # the @TOKENS@ are replaced with allowlisted nix string lists, never raw input
 _SELECT_TEMPLATE = r"""flake:
 let
@@ -31,10 +38,45 @@ let
   # exact leaf names per set to drop before recursing, so nix-eval-jobs never
   # forces (and never fetches or builds) a manually excluded attribute
   excludes = { @EXCLUDES@ };
+  # the deepest attribute path the include globs can match; recursion below it can
+  # never be selected, so it stops there (a `**` glob raises this to a hard cap).
+  # a per system set roots at "<set>.<sys>" (two path segments), so its children
+  # are at depth three and the remaining attrset recursion budget is maxDepth - 3
+  maxDepth = @MAXDEPTH@;
+  startDepth = if maxDepth > 3 then maxDepth - 3 else 0;
+  # scope-internal attrset names that are never buildable; function valued plumbing
+  # is dropped structurally below, so this only names the attrset valued plumbing
+  denylist = [ @DENYLIST@ ];
+  # prune scope plumbing before nix-eval-jobs force-recurses: keep derivations as
+  # leaves, drop functions (callPackage, newScope, ...) and self referential
+  # aliases (recurseForDerivations = false), recurse plain attrsets only while the
+  # include depth can still match, and keep an attr that throws on classification
+  # so nix-eval-jobs reports it as that attribute's own eval error rather than
+  # dropping it silently. forcing a child to classify it stays inside tryEval, so
+  # a broken attribute cannot abort the whole evaluation
+  sanitize = remaining: set:
+    let cleaned = builtins.removeAttrs set denylist;
+    in builtins.listToAttrs (builtins.concatMap (name:
+      let
+        raw = cleaned.${name};
+        probe = builtins.tryEval (
+          if builtins.isFunction raw then "fn"
+          else if (raw.type or null) == "derivation" then "drv"
+          else if builtins.isAttrs raw then
+            (if (raw.recurseForDerivations or true) == false then "norec" else "attrs")
+          else "other");
+        kind = if probe.success then probe.value else "throws";
+      in
+        if kind == "drv" || kind == "throws"
+        then [ { inherit name; value = raw; } ]
+        else if kind == "attrs" && remaining > 0
+        then [ { inherit name; value = sanitize (remaining - 1) raw; } ]
+        else [ ]
+    ) (builtins.attrNames cleaned));
   ps = builtins.foldl' (acc: set:
         builtins.foldl' (a: sys:
           if (o ? ${set}) && (o.${set} ? ${sys})
-          then a // { "${set}.${sys}" = builtins.removeAttrs o.${set}.${sys} ((excludes.${set}.${sys} or [ ]) ++ (excludes.${set}."*" or [ ])); }
+          then a // { "${set}.${sys}" = sanitize startDepth (builtins.removeAttrs o.${set}.${sys} ((excludes.${set}.${sys} or [ ]) ++ (excludes.${set}."*" or [ ]))); }
           else a
         ) acc systems
       ) { } perSystemSets;
@@ -96,6 +138,7 @@ def _build_select(
     config_sets: Sequence[str],
     leaf_sets: Sequence[str] = (),
     exclude_leaves: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
+    max_depth: int = MAX_RECURSE_DEPTH,
 ) -> str:
     # fail closed if an unallowlisted value ever reaches the embedded nix
     # the discover layer already filters these, this guards against a future
@@ -121,6 +164,9 @@ def _build_select(
         .replace("@CONFIG@", _nix_list(config_sets))
         .replace("@LEAF@", _nix_list(leaf_sets))
         .replace("@EXCLUDES@", _nix_excludes(leaves))
+        # an int, so it cannot carry an injection; clamped to the hard cap
+        .replace("@MAXDEPTH@", str(min(int(max_depth), MAX_RECURSE_DEPTH)))
+        .replace("@DENYLIST@", _nix_list(SCOPE_DENYLIST))
     )
 
 
@@ -172,6 +218,7 @@ def evaluate(
     workers: int = 4,
     exclude_leaves: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
     substituters: Iterable[str] = (),
+    max_depth: int = MAX_RECURSE_DEPTH,
 ) -> list[dict[str, Any]]:
     """Run nix-eval-jobs over the rooted output sets and return one object per attr.
 
@@ -180,9 +227,11 @@ def evaluate(
     of the whole flake and is raised. `exclude_leaves` names attributes pruned
     before recursion so they are never evaluated, fetched, or built.
     `substituters` are the caches each attribute's cache status is checked against.
+    `max_depth` bounds the per system scope recursion to the include globs' depth,
+    so a re-exported package set is not force-recursed into the whole nixpkgs lib.
     """
     select = _build_select(
-        systems, per_system_sets, config_sets, leaf_sets, exclude_leaves
+        systems, per_system_sets, config_sets, leaf_sets, exclude_leaves, max_depth
     )
     cmd = _eval_command(flake, select, workers, substituters)
     # capture stdout (the json results) but let stderr stream to the log live,

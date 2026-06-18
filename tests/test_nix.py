@@ -1,4 +1,5 @@
 from atelier.nix import _build_select, _eval_command, clean_error, is_skippable, to_job
+from atelier.types import MAX_RECURSE_DEPTH
 
 
 def test_per_system_leaf() -> None:
@@ -183,6 +184,28 @@ def test_build_select_injects_allowlisted_lists() -> None:
     assert 'perSystemSets = [ "legacyPackages" ]' in expr
     assert 'configSets = [ "nixosConfigurations" ]' in expr
     assert 'leafSets = [ "formatter" ]' in expr
+
+
+def test_build_select_sanitizes_per_system_scopes() -> None:
+    # the per system rooting must prune scope plumbing before force-recurse: drop
+    # functions and recurseForDerivations=false aliases, drop the named attrset
+    # plumbing (lib), and bound recursion to the include depth
+    expr = _build_select(["x86_64-linux"], ["legacyPackages"], [], max_depth=4)
+    assert "sanitize" in expr
+    assert "builtins.isFunction raw" in expr
+    assert "recurseForDerivations or true) == false" in expr
+    assert '"lib"' in expr
+    # maxDepth 4 leaves a recursion budget of one level past the depth-3 children
+    assert "maxDepth = 4;" in expr
+
+
+def test_build_select_clamps_depth_to_cap() -> None:
+    # a caller asking for more depth than the hard cap is clamped, so a pathological
+    # include can never request an unbounded recursion
+    expr = _build_select(
+        ["x86_64-linux"], ["legacyPackages"], [], max_depth=MAX_RECURSE_DEPTH + 99
+    )
+    assert f"maxDepth = {MAX_RECURSE_DEPTH};" in expr
 
 
 def test_build_select_guards_leaf_derivations() -> None:
