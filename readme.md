@@ -2,8 +2,8 @@
 
 <!-- deno-fmt-ignore -->
 > [!Caution]
-> Be careful if you want to use Atelier in repositories
-> (it can get very expensive very quickly)!
+> Be careful if you want to use Atelier in private repositories (it can get expensive very quickly)!
+> See [GitHub Actions pricing page](https://docs.github.com/en/billing/concepts/product-billing/github-actions) for details.
 
 <img width="282" height="272" alt="Image" src="https://github.com/user-attachments/assets/f73ea161-e210-4b5e-9f37-12c03885be39" />
 
