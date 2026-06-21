@@ -53,6 +53,16 @@ on:
         description: Extra nix.conf lines appended after the required settings
         type: string
         default: ""
+      use-tailscale:
+        description: Use tailscale during workflow
+        required: false
+        default: false
+        type: boolean
+      ts-tag:
+        description: Tailscake tag if using tailscale with non-authkey tailscale github ci
+        required: false
+        default: ""
+        type: string
   # downstream repos consume atelier by calling this workflow; the inputs mirror
   # workflow_dispatch so the generate step reads them the same way
   workflow_call:
@@ -104,6 +114,16 @@ on:
         description: Extra nix.conf lines appended after the required settings
         type: string
         default: ""
+      use-tailscale:
+        description: Use tailscale during workflow
+        required: false
+        default: false
+        type: boolean
+      ts-tag:
+        description: Tailscake tag if using tailscale with non-authkey tailscale github ci
+        required: false
+        default: ""
+        type: string
     secrets:
       ATTIC_TOKEN:
         required: false
@@ -112,6 +132,15 @@ on:
       CACHIX_SIGNING_KEY:
         required: false
       NIKS3_TOKEN:
+        required: false
+      # https://tailscale.com/docs/integrations/github/github-action
+      TS_OAUTH_CLIENT_ID:
+        required: false
+      TS_AUDIENCE:
+        required: false
+      TS_OAUTH_SECRET:
+        required: false
+      TAILSCALE_AUTHKEY:
         required: false
 
 permissions:
@@ -132,6 +161,56 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+
+      - name: Pick Tailscale auth method
+        id: choose
+        if: ${{ inputs.use-tailscale }}
+        shell: bash
+        run: |
+          chosen=""
+          if [[ "${{ secrets.TS_OAUTH_CLIENT_ID }}" != '' && "${{ secrets.TS_AUDIENCE }}" != '' ]]; then
+            chosen="federated"
+          elif [[ "${{ secrets.TS_OAUTH_CLIENT_ID }}" != '' && "${{ secrets.TS_OAUTH_SECRET }}" != '' ]]; then
+            chosen="client"
+          elif [["${{ secrets.TAILSCALE_AUTHKEY }}" != '' ]]; then
+            chosen="authkey"
+          else
+            echo "To use tailscale, define all values in one of following tuples:
+              - (secrets.TS_OAUTH_CLIENT_ID, secrets.TS_AUDIENCE, inputs.ts-tag)
+              - (secrets.TS_OAUTH_CLIENT_ID, secrets.TS_OAUTH_SECRET, inputs.ts-tag)
+              - (secrets.TAILSCALE_AUTHKEY)
+              Auth method priority: federated > client > authkey
+              See https://tailscale.com/docs/integrations/github/github-action for more info" >&2
+            exit 1
+          fi
+          if [[ "$chosen" != "authkey" &&  "${{ inputs.ts-tag }}" == '' ]]; then
+            echo "\"$chosen\" method requires a non-empty ts-tag variable (i.e. tag:my-runner)" >&2
+            exit 1
+          fi
+          echo "auth=$chosen" >> "$GITHUB_OUTPUT"
+          echo "Using tailscale with auth: $chosen"
+
+      - name: Connect to Tailscale with oauth client secret
+        uses: tailscale/github-action@v4
+        if: ${{ inputs.use-tailscale && steps.choose.outputs.auth == 'client' }}
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ inputs.ts-tag }}
+
+      - name: Connect to Tailscale with federated identity
+        uses: tailscale/github-action@v4
+        if: ${{ inputs.use-tailscale && steps.choose.outputs.auth == 'federated' }}
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: ${{ inputs.ts-tag }}
+
+      - name: Connect to Tailscale with authkey
+        uses: tailscale/github-action@v4
+        if: ${{ inputs.use-tailscale && steps.choose.outputs.auth == 'authkey' }}
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
       - name: Set Up Nix
         uses: jenseng/dynamic-uses@d683d56bffbc1f36158989b5fc62288697aae27b # 2025-12-18
@@ -204,12 +283,18 @@ jobs:
       rules: ${{ inputs.rules }}
       install-command: ${{ inputs.install-command }}
       extra-conf: ${{ inputs.extra-conf }}
+      use-tailscale: ${{ inputs.use-tailscale }}
+      ts-tag: ${{ inputs.ts-tag }}
     secrets:
       ATTIC_TOKEN: ${{ secrets.ATTIC_TOKEN }}
       CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
       CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
       NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
-
+      # https://tailscale.com/docs/integrations/github/github-action
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
   Skip:
     needs: Discover
     if: ${{ needs.Discover.outputs.skipped != '' && needs.Discover.outputs.skipped != '[]' && github.event.pull_request.head.repo.fork != true }}

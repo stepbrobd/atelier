@@ -39,6 +39,16 @@ on:
         required: false
         default: ""
         type: string
+      use-tailscale:
+        description: Use tailscale during workflow
+        required: false
+        default: false
+        type: boolean
+      ts-tag:
+        description: Tailscake tag if using tailscale with non-authkey tailscale github ci
+        required: false
+        default: ""
+        type: string
     secrets:
       ATTIC_TOKEN:
         required: false
@@ -47,6 +57,15 @@ on:
       CACHIX_SIGNING_KEY:
         required: false
       NIKS3_TOKEN:
+        required: false
+      # https://tailscale.com/docs/integrations/github/github-action
+      TS_OAUTH_CLIENT_ID:
+        required: false
+      TS_AUDIENCE:
+        required: false
+      TS_OAUTH_SECRET:
+        required: false
+      TAILSCALE_AUTHKEY:
         required: false
 
 permissions:
@@ -73,7 +92,6 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
       - name: Report Evaluation Failure
         if: ${{ matrix.installable == '' }}
         shell: bash
@@ -81,6 +99,55 @@ jobs:
           echo "::error::Evaluation failed for ${LABEL}"
           printf '%s\n' "${EVAL_ERROR}"
           exit 1
+
+      - name: Pick Tailscale auth method
+        id: choose
+        if: ${{ inputs.use-tailscale }}
+        shell: bash
+        run: |
+          chosen=""
+          if [[ "${{ secrets.TS_OAUTH_CLIENT_ID }}" != '' && "${{ secrets.TS_AUDIENCE }}" != '' ]]; then
+            chosen="federated"
+          elif [[ "${{ secrets.TS_OAUTH_CLIENT_ID }}" != '' && "${{ secrets.TS_OAUTH_SECRET }}" != '' ]]; then
+            chosen="client"
+          elif [["${{ secrets.TAILSCALE_AUTHKEY }}" != '' ]]; then
+            chosen="authkey"
+          else
+            echo "To use tailscale, specify one of these value tuples:
+                - (secrets.TS_OAUTH_CLIENT_ID, secrets.TS_AUDIENCE, inputs.ts-tag)
+                - (secrets.TS_OAUTH_CLIENT_ID, secrets.TS_OAUTH_SECRET, inputs.ts-tag)
+                - (secrets.TAILSCALE_AUTHKEY)
+                See https://tailscale.com/docs/integrations/github/github-action for more info" >&2
+            exit 1
+          fi
+          if [[ "$chosen" != "authkey" &&  "${{ inputs.ts-tag }}" == '' ]]; then
+            echo "\"$chosen\" method requires a non-empty ts-tag variable (i.e. tag:my-runner)" >&2
+            exit 1
+          fi
+          echo "auth=$chosen" >> "$GITHUB_OUTPUT"
+          echo "Using tailscale with auth: $chosen"
+
+      - name: Connect to Tailscale with oauth client secret
+        uses: tailscale/github-action@v4
+        if: ${{ inputs.use-tailscale && steps.choose.outputs.auth == 'client' }}
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ inputs.ts-tag }}
+
+      - name: Connect to Tailscale with federated identity
+        uses: tailscale/github-action@v4
+        if: ${{ inputs.use-tailscale && steps.choose.outputs.auth == 'federated' }}
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: ${{ inputs.ts-tag }}
+
+      - name: Connect to Tailscale with authkey
+        uses: tailscale/github-action@v4
+        if: ${{ inputs.use-tailscale && steps.choose.outputs.auth == 'authkey' }}
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
 
       - name: Set Up Nix
         if: ${{ matrix.installable != '' }}
@@ -112,6 +179,7 @@ jobs:
           CACHIX_SIGNING_KEY: ${{ secrets.CACHIX_SIGNING_KEY }}
           NIKS3_SERVER: ${{ vars.NIKS3_SERVER }}
           NIKS3_TOKEN: ${{ secrets.NIKS3_TOKEN }}
+
         run: |
           set -uo pipefail
 
