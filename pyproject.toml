@@ -1,6 +1,6 @@
 [project]
 name = "atelier"
-version = "2026.614.1"
+version = "2026.621.0"
 description = "nix atelier ;)"
 readme = "readme.md"
 requires-python = ">=3.14"
