@@ -1,6 +1,7 @@
 # Atelier
 
 <!-- deno-fmt-ignore -->
+
 > [!Caution]
 > Be careful if you want to use Atelier in private repositories (it can get expensive very quickly)!
 > See [GitHub Actions pricing page](https://docs.github.com/en/billing/concepts/product-billing/github-actions) for details.
@@ -235,6 +236,39 @@ stay yours. Pin `@master` to track the latest, or a tag/SHA (support added by
 version. Make `Gate` the single required status in branch protection: it stays
 green whether the matrix is empty, every build passes, or attributes are
 skipped.
+
+### Tailscale
+
+If some resources you use is hidden inside a tailscale network, you can enable
+access to your tailnet from github CI runner with these options:
+
+```yaml
+jobs:
+  Atelier:
+    uses: ...
+    with:
+      # other options
+      use-tailscale: true
+      # required if using tailscale federated client identity or tailscale oauth client
+      ts-tag: tag:attic-runner
+    secrets:
+      # TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+      # TAILSCALE_AUTHKEY: ${{secrets.TAILSCALE_AUTHKEY }}
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+```
+
+Tailscale options are ignored when `use-tailscale` is false.
+
+You only have to specify one of these following value combinations:
+
+- (secrets.TS_OAUTH_CLIENT_ID, secrets.TS_AUDIENCE, inputs.ts-tag)
+- (secrets.TS_OAUTH_CLIENT_ID, secrets.TS_OAUTH_SECRET, inputs.ts-tag)
+- (secrets.TAILSCALE_AUTHKEY)
+
+and CI will figure out what auth method to use with priority `federated > oauth client > authkey`.
+See [tailscale documentation](https://tailscale.com/docs/integrations/github/github-action)
+for more info.
 
 ## Custom Nix installer
 
