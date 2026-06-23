@@ -186,7 +186,10 @@ def _eval_command(
     cmd = [
         "nix",
         "run",
-        "nixpkgs#nix-eval-jobs",
+        # "nixpkgs#nix-eval-jobs",
+        # TODO: drop after new nix-eval-jobs tag
+        # ref https://github.com/stepbrobd/atelier/issues/17
+        "github:stepbrobd/inc#nix-eval-jobs",
         "--",
         "--flake",
         flake,
