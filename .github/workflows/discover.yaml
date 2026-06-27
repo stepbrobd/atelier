@@ -40,7 +40,7 @@ on:
       push:
         description: Push results to the binary cache
         type: boolean
-        default: false
+        default: true
       workers:
         description: Eval workers; each may use ~4 GiB, keep workers x 4 GiB under runner RAM
         type: number
@@ -88,7 +88,7 @@ on:
       push:
         description: Push results to the binary cache
         type: boolean
-        default: false
+        default: true
       tool:
         description: Atelier tool flake ref a caller runs, the published flake
         type: string

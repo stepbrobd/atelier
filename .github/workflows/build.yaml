@@ -22,7 +22,7 @@ on:
       push:
         description: Push build results to the binary cache
         required: false
-        default: false
+        default: true
         type: boolean
       rules:
         description: Atelier rule file whose substituters and trusted-public-keys feed nix.conf
