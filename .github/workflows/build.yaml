@@ -101,7 +101,7 @@ jobs:
           nix build "${INSTALLABLE}^*" --no-link --print-build-logs 2>&1 | tee build.log
 
       - name: Push To Cache
-        if: ${{ matrix.installable != '' && github.event.pull_request.head.repo.fork != true && ((vars.ATTIC_SERVER != '' && vars.ATTIC_CACHE != '') || vars.CACHIX_CACHE != '' || vars.NIKS3_SERVER != '') }}
+        if: ${{ inputs.push && matrix.installable != '' && github.event.pull_request.head.repo.fork != true && ((vars.ATTIC_SERVER != '' && vars.ATTIC_CACHE != '') || vars.CACHIX_CACHE != '' || vars.NIKS3_SERVER != '') }}
         shell: bash
         env:
           ATTIC_SERVER: ${{ vars.ATTIC_SERVER }}
