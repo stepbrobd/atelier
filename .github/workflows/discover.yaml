@@ -184,9 +184,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.Discover.outputs.chunks) }}
     name: ${{ matrix.name }}
-    # ./ resolves to atelier at this workflow's commit even for downstream
-    # callers (unlike a local action ref), so it stays relative
-    uses: ./.github/workflows/build.yaml
+    uses: $/.github/workflows/build.yaml
     with:
       repository: ${{ inputs.repository }}
       ref: ${{ inputs.ref }}
