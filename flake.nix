@@ -85,7 +85,7 @@
         ${lib.getExe pkgs.taplo} format pyproject.toml
         ${lib.getExe pkgs.ty} check --fix --error all .
         ${lib.getExe pkgs.uv} run pytest
-        ${lib.getExe pkgs.zizmor} --fix=all .
+        ${lib.getExe pkgs.zizmor} --offline --fix=all .
         popd
       '';
     };
