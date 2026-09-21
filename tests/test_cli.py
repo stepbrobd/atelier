@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest import mock
 
+import pytest
 from click.testing import CliRunner
 
 from atelier.cli import _FALLBACK_WORKERS, _default_workers, _workers_for_memory, cli
@@ -43,29 +44,29 @@ def test_default_falls_back_when_memory_undetectable() -> None:
         assert _default_workers() == _FALLBACK_WORKERS
 
 
-def test_discover_uses_defaults_when_rule_file_missing() -> None:
+def test_discover_uses_defaults_when_rule_file_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # a repo with no atelier.toml must still evaluate, with the built-in defaults,
     # rather than erroring on the missing file
+    monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    with (
-        runner.isolated_filesystem(),
-        mock.patch("atelier.cli._discover.discover", return_value=([], [])) as disc,
-    ):
+    with mock.patch("atelier.cli._discover.discover", return_value=([], [])) as disc:
         result = runner.invoke(cli, ["discover"], catch_exceptions=False)
     assert result.exit_code == 0
     assert disc.call_args.args[0] == defaults()
     assert "No rule file at atelier.toml" in result.stderr
 
 
-def test_discover_uses_defaults_when_explicit_rules_file_missing() -> None:
+def test_discover_uses_defaults_when_explicit_rules_file_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # the reusable workflow always passes --rules atelier.toml explicitly (it
     # defaults inputs.rules to that literal), so the fallback must key off the
     # file being absent, not off whether --rules was given on the command line
+    monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    with (
-        runner.isolated_filesystem(),
-        mock.patch("atelier.cli._discover.discover", return_value=([], [])) as disc,
-    ):
+    with mock.patch("atelier.cli._discover.discover", return_value=([], [])) as disc:
         result = runner.invoke(
             cli, ["discover", "--rules", "atelier.toml"], catch_exceptions=False
         )
@@ -74,13 +75,13 @@ def test_discover_uses_defaults_when_explicit_rules_file_missing() -> None:
     assert "No rule file at atelier.toml" in result.stderr
 
 
-def test_discover_loads_an_existing_rule_file() -> None:
+def test_discover_loads_an_existing_rule_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "atelier.toml").write_text('systems = ["aarch64-darwin"]\n')
     runner = CliRunner()
-    with (
-        runner.isolated_filesystem(),
-        mock.patch("atelier.cli._discover.discover", return_value=([], [])) as disc,
-    ):
-        Path("atelier.toml").write_text('systems = ["aarch64-darwin"]\n')
+    with mock.patch("atelier.cli._discover.discover", return_value=([], [])) as disc:
         result = runner.invoke(cli, ["discover"], catch_exceptions=False)
     assert result.exit_code == 0
     assert disc.call_args.args[0].systems == ("aarch64-darwin",)
