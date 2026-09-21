@@ -105,14 +105,14 @@ def _selected(
 
 
 def _log_name(label: str) -> str:
-    """
+    r"""
     An artifact safe upload name for build cell's log.
 
     A flake attribute can hold any character: quoted names carry slashes, dots, or
     unicode (e.g. ``checks.<sys>."a/b.c"`` or a freeform ``out.<sys>.a."b.c"``), and
     nested sets like ``legacyPackages`` go arbitrarily deep.
 
-    GitHub artifact name forbids ``/ " : < > | * ? \\`` and newlines.
+    GitHub artifact name forbids ``/ " : < > | * ? \`` and newlines.
     """
     return f"log-{quote(label, safe='')}"
 
