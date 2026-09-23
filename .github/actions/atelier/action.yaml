@@ -145,7 +145,7 @@ runs:
 
     - name: Install Nix
       if: ${{ inputs.install-command == '' }}
-      uses: nixos/nix-installer-action@6b8548fe06acfb0155a50ab5d561accb215764cc # 2026-04-06
+      uses: nixos/nix-installer-action@62c1943b776c509394b550f3f983adc14e9212d6 # v1.0.0
       with:
         # authenticate github api calls so flake fetches (github: refs, the
         # nixpkgs registry, the niks3 install) get the 5000/hr token limit
